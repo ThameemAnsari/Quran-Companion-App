@@ -16,7 +16,6 @@ import { ReflectionScreen } from '../screens/ReflectionScreen';
 import { BookmarkScreen } from '../screens/BookmarkScreen';
 import { ProgressScreen } from '../screens/ProgressScreen';
 import { ProfileScreen } from '../screens/ProfileScreen';
-import { QuranScreen } from '../screens/QuranScreen';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 const Tab = createBottomTabNavigator<MainTabParamList>();
@@ -36,7 +35,6 @@ function MainTabs() {
         tabBarIcon: ({ color, size, focused }) => {
           const icons: Record<string, [string, string]> = {
             ForYou: ['home', 'home-outline'],
-            Quran: ['book', 'book-outline'],
             Bookmarks: ['bookmark', 'bookmark-outline'],
             Progress: ['bar-chart', 'bar-chart-outline'],
             Profile: ['person', 'person-outline'],
@@ -55,7 +53,6 @@ function MainTabs() {
       })}
     >
       <Tab.Screen name="ForYou" component={AyahScreen} options={{ title: 'Home' }} />
-      <Tab.Screen name="Quran" component={QuranScreen} options={{ title: 'Quran' }} />
       <Tab.Screen name="Bookmarks" component={BookmarkScreen} />
       <Tab.Screen name="Progress" component={ProgressScreen} />
       <Tab.Screen name="Profile" component={ProfileScreen} />

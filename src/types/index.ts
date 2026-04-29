@@ -97,7 +97,6 @@ export type ForYouTabParamList = {
 
 export type MainTabParamList = {
   ForYou: undefined;
-  Quran: undefined;
   Bookmarks: undefined;
   Progress: undefined;
   Profile: undefined;

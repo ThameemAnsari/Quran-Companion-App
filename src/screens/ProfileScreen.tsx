@@ -27,7 +27,7 @@ export const ProfileScreen: React.FC = () => {
     { icon: 'musical-notes-outline', label: 'Reciter', sub: 'Mishary Alafasy' },
     { icon: 'moon-outline', label: 'Dark Mode', sub: 'Coming soon' },
     { icon: 'share-outline', label: 'Share App', sub: 'Share with friends' },
-    { icon: 'information-circle-outline', label: 'About', sub: 'Version 1.0.0' },
+    { icon: 'information-circle-outline', label: 'About', sub: 'Version 1.1.0' },
   ] as const;
 
   return (

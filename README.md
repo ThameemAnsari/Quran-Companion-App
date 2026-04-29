@@ -19,11 +19,7 @@ A beautifully designed React Native (Expo) app that helps users build a consiste
 - Bookmark and reflect on any Ayah
 - Swipe to next Ayah
 
-### 📚 Quran Browser
-- Browse all 114 Surahs
-- Read any Surah verse by verse
-
-### 🔖 Bookmarks
+###  Bookmarks
 - Save favourite Ayahs
 - View and manage your collection
 
@@ -99,7 +95,6 @@ src/
 │   ├── HomeScreen     # Mood selector
 │   ├── LoadingScreen  # Fetches ayahs
 │   ├── AyahScreen     # Core reader
-│   ├── QuranScreen    # Surah browser
 │   ├── BookmarkScreen
 │   ├── ProgressScreen
 │   ├── ReflectionScreen
