@@ -1,0 +1,173 @@
+import { create } from 'zustand';
+import { persist, createJSONStorage } from 'zustand/middleware';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import type { Ayah, Mood, Reflection, WeekStats } from '../types';
+
+interface AppState {
+  // ── mood & current ayah
+  selectedMood: Mood | null;
+  currentAyah: Ayah | null;
+  ayahList: Ayah[];
+
+  // ── bookmarks
+  bookmarks: Ayah[];
+
+  // ── reflections
+  reflections: Reflection[];
+
+  // ── progress / streak
+  streak: number;
+  lastActiveDate: string | null;
+  weekStats: WeekStats;
+  /** Per-day stats keyed by ISO date string "YYYY-MM-DD" */
+  dailyStats: Record<string, WeekStats>;
+
+  // ── actions
+  setMood: (mood: Mood) => void;
+  setCurrentAyah: (ayah: Ayah) => void;
+  setAyahList: (ayahs: Ayah[]) => void;
+  nextAyah: () => void;
+
+  addBookmark: (ayah: Ayah) => void;
+  removeBookmark: (verseKey: string) => void;
+  isBookmarked: (verseKey: string) => boolean;
+
+  addReflection: (reflection: Reflection) => void;
+
+  incrementAyahsRead: () => void;
+  addTimeSpent: (minutes: number) => void;
+  checkAndUpdateStreak: () => void;
+  getDayStats: (dateStr: string) => WeekStats;
+}
+
+const todayStr = () => new Date().toISOString().split('T')[0];
+
+export const useAppStore = create<AppState>()(
+  persist(
+    (set, get) => ({
+      selectedMood: null,
+      currentAyah: null,
+      ayahList: [],
+      bookmarks: [],
+      reflections: [],
+      streak: 0,
+      lastActiveDate: null,
+      weekStats: {
+        ayahsRead: 0,
+        reflections: 0,
+        bookmarks: 0,
+        timeSpentMinutes: 0,
+      },
+      dailyStats: {},
+
+      setMood: (mood) => set({ selectedMood: mood }),
+
+      setCurrentAyah: (ayah) => set({ currentAyah: ayah }),
+
+      setAyahList: (ayahs) =>
+        set({ ayahList: ayahs, currentAyah: ayahs[0] ?? null }),
+
+      nextAyah: () => {
+        const { ayahList, currentAyah } = get();
+        if (!currentAyah || ayahList.length === 0) return;
+        const idx = ayahList.findIndex((a) => a.verseKey === currentAyah.verseKey);
+        const next = ayahList[(idx + 1) % ayahList.length];
+        set({ currentAyah: next });
+        // incrementAyahsRead is called by AyahScreen's useEffect — don't call it here too
+      },
+
+      addBookmark: (ayah) => {
+        const { bookmarks, weekStats, dailyStats } = get();
+        if (bookmarks.find((b) => b.verseKey === ayah.verseKey)) return;
+        const today = todayStr();
+        const prev = dailyStats[today] ?? { ayahsRead: 0, reflections: 0, bookmarks: 0, timeSpentMinutes: 0 };
+        set({
+          bookmarks: [...bookmarks, ayah],
+          weekStats: { ...weekStats, bookmarks: weekStats.bookmarks + 1 },
+          dailyStats: { ...dailyStats, [today]: { ...prev, bookmarks: prev.bookmarks + 1 } },
+        });
+      },
+
+      removeBookmark: (verseKey) =>
+        set((s) => {
+          const exists = s.bookmarks.some((b) => b.verseKey === verseKey);
+          if (!exists) return {};
+          const today = todayStr();
+          const prev = s.dailyStats[today];
+          return {
+            bookmarks: s.bookmarks.filter((b) => b.verseKey !== verseKey),
+            weekStats: { ...s.weekStats, bookmarks: Math.max(0, s.weekStats.bookmarks - 1) },
+            dailyStats: prev
+              ? { ...s.dailyStats, [today]: { ...prev, bookmarks: Math.max(0, prev.bookmarks - 1) } }
+              : s.dailyStats,
+          };
+        }),
+
+      isBookmarked: (verseKey) =>
+        get().bookmarks.some((b) => b.verseKey === verseKey),
+
+      addReflection: (reflection) =>
+        set((s) => {
+          const today = todayStr();
+          const prev = s.dailyStats[today] ?? { ayahsRead: 0, reflections: 0, bookmarks: 0, timeSpentMinutes: 0 };
+          return {
+            reflections: [reflection, ...s.reflections],
+            weekStats: { ...s.weekStats, reflections: s.weekStats.reflections + 1 },
+            dailyStats: { ...s.dailyStats, [today]: { ...prev, reflections: prev.reflections + 1 } },
+          };
+        }),
+
+      incrementAyahsRead: () =>
+        set((s) => {
+          const today = todayStr();
+          const prev = s.dailyStats[today] ?? { ayahsRead: 0, reflections: 0, bookmarks: 0, timeSpentMinutes: 0 };
+          return {
+            weekStats: { ...s.weekStats, ayahsRead: s.weekStats.ayahsRead + 1 },
+            dailyStats: { ...s.dailyStats, [today]: { ...prev, ayahsRead: prev.ayahsRead + 1 } },
+          };
+        }),
+
+      addTimeSpent: (minutes: number) =>
+        set((s) => {
+          const today = todayStr();
+          const prev = s.dailyStats[today] ?? { ayahsRead: 0, reflections: 0, bookmarks: 0, timeSpentMinutes: 0 };
+          return {
+            weekStats: { ...s.weekStats, timeSpentMinutes: s.weekStats.timeSpentMinutes + minutes },
+            dailyStats: { ...s.dailyStats, [today]: { ...prev, timeSpentMinutes: prev.timeSpentMinutes + minutes } },
+          };
+        }),
+
+      checkAndUpdateStreak: () => {
+        const { lastActiveDate, streak } = get();
+        const today = todayStr();
+        if (lastActiveDate === today) return;
+
+        const yesterday = new Date();
+        yesterday.setDate(yesterday.getDate() - 1);
+        const yesterdayStr = yesterday.toISOString().split('T')[0];
+
+        const newStreak =
+          lastActiveDate === yesterdayStr ? streak + 1 : 1;
+
+        set({ streak: newStreak, lastActiveDate: today });
+      },
+
+      getDayStats: (dateStr: string) => {
+        const { dailyStats } = get();
+        return dailyStats[dateStr] ?? { ayahsRead: 0, reflections: 0, bookmarks: 0, timeSpentMinutes: 0 };
+      },
+    }),
+    {
+      name: 'quran-companion-storage',
+      storage: createJSONStorage(() => AsyncStorage),
+      partialize: (s) => ({
+        bookmarks: s.bookmarks,
+        reflections: s.reflections,
+        streak: s.streak,
+        lastActiveDate: s.lastActiveDate,
+        weekStats: s.weekStats,
+        dailyStats: s.dailyStats,
+      }),
+    }
+  )
+);

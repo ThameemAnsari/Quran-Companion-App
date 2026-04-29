@@ -1,0 +1,38 @@
+{
+  "expo": {
+    "name": "Quran Companion",
+    "slug": "quran-companion",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "cover",
+      "backgroundColor": "#F5F7F2"
+    },
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.qurancompanion.app",
+      "infoPlist": {
+        "UIBackgroundModes": ["audio"]
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#F5F7F2"
+      },
+      "package": "com.qurancompanion.app",
+      "permissions": ["android.permission.RECORD_AUDIO"]
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": ["expo-av"],
+    "extra": {
+      "quranApiBase": "https://api.qurancdn.com/api/qdc/v4",
+      "audioBase": "https://verses.quran.com"
+    }
+  }
+}
