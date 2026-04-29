@@ -26,7 +26,7 @@ type Props = CompositeScreenProps<
 
 export const AyahScreen: React.FC<Props> = ({ navigation }) => {
   const { currentAyah, nextAyah, addBookmark, removeBookmark, isBookmarked, incrementAyahsRead, addTimeSpent,
-    permissionScreenShown, notificationsEnabled, weekStats, permissionDeniedDate } =
+    permissionScreenShown, notificationsEnabled, weekStats, permissionDeniedDate, selectedMood } =
     useAppStore();
   const [showExplanation, setShowExplanation] = useState(true);
   const [showPermissionModal, setShowPermissionModal] = useState(false);
@@ -132,13 +132,26 @@ export const AyahScreen: React.FC<Props> = ({ navigation }) => {
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
       >
-        {/* Theme badge */}
-        {currentAyah.theme && (
-          <View style={styles.themeBadge}>
-            <Ionicons name="leaf" size={13} color="#2E7D32" />
-            <Text style={styles.themeBadgeText}>Theme: {currentAyah.theme}</Text>
-          </View>
-        )}
+        {/* Theme badge row: theme on left, change feeling on right */}
+        <View style={styles.themeRow}>
+          {currentAyah.theme && (
+            <View style={styles.themeBadge}>
+              <Ionicons name="leaf" size={13} color="#2E7D32" />
+              <Text style={styles.themeBadgeText}>Theme: {currentAyah.theme}</Text>
+            </View>
+          )}
+          {selectedMood && (
+            <TouchableOpacity
+              style={styles.changeMoodBtn}
+              onPress={() => navigation.navigate('Home')}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <Ionicons name="color-wand-outline" size={14} color="#2E7D32" />
+              <Text style={styles.changeMoodText}>{selectedMood}</Text>
+              <Ionicons name="chevron-down" size={12} color="#2E7D32" />
+            </TouchableOpacity>
+          )}
+        </View>
 
         {/* Animated ayah card */}
         <Animated.View
@@ -259,6 +272,22 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     backgroundColor: '#F5F7F2',
   },
+  changeMoodBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#E8F5E9',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
+  },
+  changeMoodText: {
+    fontSize: 12,
+    color: '#2E7D32',
+    fontWeight: '700',
+  },
   headerTitle: {
     fontSize: 22,
     fontWeight: '700',
@@ -270,11 +299,16 @@ const styles = StyleSheet.create({
     paddingBottom: 32,
     gap: 14,
   },
+  themeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    width: '100%',
+  },
   themeBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    alignSelf: 'flex-start',
-    backgroundColor: '#E8F5E9',
+    backgroundColor: '#F0FDF4',
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 20,

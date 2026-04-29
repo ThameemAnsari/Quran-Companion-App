@@ -70,7 +70,12 @@ export type Mood =
   | 'Sad'
   | 'Angry'
   | 'Confused'
-  | 'Need Motivation';
+  | 'Need Motivation'
+  | 'Grateful'
+  | 'Lonely'
+  | 'Fearful'
+  | 'Seeking Forgiveness'
+  | 'Seeking Peace';
 
 export interface MoodOption {
   label: Mood;

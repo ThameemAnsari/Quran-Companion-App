@@ -2,12 +2,17 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { Ayah, Mood, Reflection, WeekStats } from '../types';
+import { fetchMoreAyahsForMood } from '../services/aiService';
 
 interface AppState {
   // ── mood & current ayah
   selectedMood: Mood | null;
   currentAyah: Ayah | null;
   ayahList: Ayah[];
+  ayahIndex: number;
+  fetchAttempt: number;
+  hasMoreAyahs: boolean;
+  isFetchingMore: boolean;
 
   // ── bookmarks
   bookmarks: Ayah[];
@@ -67,6 +72,10 @@ export const useAppStore = create<AppState>()(
       selectedMood: null,
       currentAyah: null,
       ayahList: [],
+      ayahIndex: 0,
+      fetchAttempt: 0,
+      hasMoreAyahs: true,
+      isFetchingMore: false,
       bookmarks: [],
       reflections: [],
       streak: 0,
@@ -88,15 +97,43 @@ export const useAppStore = create<AppState>()(
 
       setCurrentAyah: (ayah) => set({ currentAyah: ayah }),
 
-      setAyahList: (ayahs) =>
-        set({ ayahList: ayahs, currentAyah: ayahs[0] ?? null }),
+      setAyahList: (ayahs) => {
+        const seen = new Set<string>();
+        const unique = ayahs.filter((a) => !seen.has(a.verseKey) && !!seen.add(a.verseKey));
+        set({ ayahList: unique, currentAyah: unique[0] ?? null, ayahIndex: 0, fetchAttempt: 0, hasMoreAyahs: true, isFetchingMore: false });
+      },
 
-      nextAyah: () => {
-        const { ayahList, currentAyah } = get();
-        if (!currentAyah || ayahList.length === 0) return;
-        const idx = ayahList.findIndex((a) => a.verseKey === currentAyah.verseKey);
-        const next = ayahList[(idx + 1) % ayahList.length];
-        set({ currentAyah: next });
+      nextAyah: async () => {
+        const { ayahList, ayahIndex, hasMoreAyahs, isFetchingMore, selectedMood, fetchAttempt } = get();
+        if (ayahList.length === 0) return;
+
+        const isAtEnd = ayahIndex >= ayahList.length - 1;
+        const nextIdx = isAtEnd ? 0 : ayahIndex + 1;
+        set({ currentAyah: ayahList[nextIdx], ayahIndex: nextIdx });
+
+        // Pre-fetch when 3 ayahs from end (or at end) so new ayahs are ready before cycling repeats
+        const nearEnd = ayahIndex >= ayahList.length - 4;
+        if (nearEnd && hasMoreAyahs && !isFetchingMore && selectedMood) {
+          set({ isFetchingMore: true });
+          try {
+            const { ayahList: currentList } = get();
+            const existingKeys = new Set(currentList.map((a) => a.verseKey));
+            const { ayahs: fresh, nextAttempt, exhausted } = await fetchMoreAyahsForMood(
+              selectedMood,
+              fetchAttempt,
+              existingKeys,
+            );
+            const { ayahList: latestList } = get();
+            set({
+              ayahList: fresh.length > 0 ? [...latestList, ...fresh] : latestList,
+              fetchAttempt: nextAttempt,
+              hasMoreAyahs: !exhausted,
+              isFetchingMore: false,
+            });
+          } catch {
+            set({ isFetchingMore: false });
+          }
+        }
         // incrementAyahsRead is called by AyahScreen's useEffect — don't call it here too
       },
 

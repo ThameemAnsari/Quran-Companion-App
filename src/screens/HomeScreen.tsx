@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef, useCallback } from 'react';
 import {
   View,
   Text,
@@ -9,6 +9,7 @@ import {
   Image,
 } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { useFocusEffect } from '@react-navigation/native';
 import type { RootStackParamList, Mood } from '../types';
 import { MOOD_OPTIONS } from '../services/aiService';
 import { MoodCard } from '../components/MoodCard';
@@ -18,10 +19,17 @@ type Props = NativeStackScreenProps<RootStackParamList, 'Home'>;
 
 export const HomeScreen: React.FC<Props> = ({ navigation }) => {
   const { setMood, checkAndUpdateStreak } = useAppStore();
+  const scrollViewRef = useRef<ScrollView>(null);
 
   useEffect(() => {
     checkAndUpdateStreak();
   }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      scrollViewRef.current?.scrollTo({ y: 0, animated: false });
+    }, [])
+  );
 
   const handleMoodSelect = (mood: Mood) => {
     setMood(mood);
@@ -32,6 +40,7 @@ export const HomeScreen: React.FC<Props> = ({ navigation }) => {
     <SafeAreaView style={styles.safe}>
       <StatusBar barStyle="dark-content" backgroundColor="#F5F7F2" />
       <ScrollView
+        ref={scrollViewRef}
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
       >
@@ -47,7 +56,7 @@ export const HomeScreen: React.FC<Props> = ({ navigation }) => {
         {/* Title */}
         <Text style={styles.title}>How are you feeling today?</Text>
         <Text style={styles.subtitle}>
-          We'll find the right ayahs for your heart
+          Choose your heart's state — we'll find the right ayahs for you
         </Text>
 
         {/* Mood cards */}
