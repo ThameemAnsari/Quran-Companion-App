@@ -17,6 +17,7 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList, MainTabParamList } from '../types';
 import { useAppStore } from '../store/useAppStore';
 import { AudioPlayer } from '../components/AudioPlayer';
+import { NotificationPermissionModal } from '../components/NotificationPermissionModal';
 
 type Props = CompositeScreenProps<
   BottomTabScreenProps<MainTabParamList, 'ForYou'>,
@@ -24,12 +25,15 @@ type Props = CompositeScreenProps<
 >;
 
 export const AyahScreen: React.FC<Props> = ({ navigation }) => {
-  const { currentAyah, nextAyah, addBookmark, removeBookmark, isBookmarked, incrementAyahsRead, addTimeSpent } =
+  const { currentAyah, nextAyah, addBookmark, removeBookmark, isBookmarked, incrementAyahsRead, addTimeSpent,
+    permissionScreenShown, notificationsEnabled, weekStats } =
     useAppStore();
   const [showExplanation, setShowExplanation] = useState(true);
+  const [showPermissionModal, setShowPermissionModal] = useState(false);
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(20)).current;
   const sessionStartRef = useRef<number>(Date.now());
+  const permTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const bookmarked = currentAyah ? isBookmarked(currentAyah.verseKey) : false;
 
@@ -58,6 +62,20 @@ export const AyahScreen: React.FC<Props> = ({ navigation }) => {
     if (currentAyah) incrementAyahsRead();
   }, [currentAyah?.verseKey]);
 
+  // Show pre-permission screen after user reads first ayah (~30s in)
+  // Trigger once: only if not already shown and notifications not yet enabled
+  useEffect(() => {
+    if (permissionScreenShown || notificationsEnabled) return;
+    if (weekStats.ayahsRead < 1) return;
+    // 30-second delay so the user is engaged before we ask
+    permTimerRef.current = setTimeout(() => {
+      setShowPermissionModal(true);
+    }, 30_000);
+    return () => {
+      if (permTimerRef.current) clearTimeout(permTimerRef.current);
+    };
+  }, [weekStats.ayahsRead]);
+
   if (!currentAyah) {
     return (
       <SafeAreaView style={styles.safe}>
@@ -83,6 +101,13 @@ export const AyahScreen: React.FC<Props> = ({ navigation }) => {
   return (
     <SafeAreaView style={styles.safe}>
       <StatusBar barStyle="dark-content" backgroundColor="#F5F7F2" />
+
+      {/* Pre-permission modal — shown once after first ayah */}
+      <NotificationPermissionModal
+        visible={showPermissionModal}
+        onDismiss={() => setShowPermissionModal(false)}
+      />
+
       {/* Header */}
       <View style={styles.header}>
         <Text style={styles.headerTitle}>For You</Text>

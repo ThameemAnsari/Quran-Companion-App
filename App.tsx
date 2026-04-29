@@ -7,7 +7,6 @@ import * as Notifications from 'expo-notifications';
 import { AppNavigator } from './src/navigation/AppNavigator';
 import { useAppStore } from './src/store/useAppStore';
 import {
-  requestNotificationPermission,
   evaluateAndSendNotification,
   scheduleDailyEvaluationTrigger,
 } from './src/services/notificationService';
@@ -29,13 +28,13 @@ function NotificationBootstrap() {
   // ── Bootstrap on mount ────────────────────────────────────────────────────
   useEffect(() => {
     (async () => {
-      const granted = await requestNotificationPermission();
-      if (!granted) return;
+      // Only evaluate/schedule if user has already granted permission via the
+      // pre-permission screen (notificationsEnabled = true in store).
+      if (!notificationsEnabled) return;
 
-      // Schedule a silent daily trigger at 6 PM to re-evaluate
+      // Ensure daily trigger is registered after every fresh app install
       await scheduleDailyEvaluationTrigger(18, 0);
 
-      // Evaluate immediately on first launch
       const type = await evaluateAndSendNotification({
         lastActiveDate,
         streak,

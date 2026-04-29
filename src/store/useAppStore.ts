@@ -29,6 +29,10 @@ interface AppState {
   comebackSentDate: string | null;
   /** Whether the user enabled daily reminders in Profile settings */
   notificationsEnabled: boolean;
+  /** Whether we've already shown the pre-permission screen (show only once) */
+  permissionScreenShown: boolean;
+  /** ISO date user tapped "Maybe Later" — used for 2-day re-ask cooldown */
+  permissionDeniedDate: string | null;
 
   // ── actions
   setMood: (mood: Mood) => void;
@@ -51,6 +55,8 @@ interface AppState {
   setLastNotificationTime: (ts: number) => void;
   setComebackSentDate: (date: string) => void;
   setNotificationsEnabled: (enabled: boolean) => void;
+  setPermissionScreenShown: (shown: boolean) => void;
+  setPermissionDeniedDate: (date: string | null) => void;
 }
 
 const todayStr = () => new Date().toISOString().split('T')[0];
@@ -75,6 +81,8 @@ export const useAppStore = create<AppState>()(
       lastNotificationTime: null,
       comebackSentDate: null,
       notificationsEnabled: false,
+      permissionScreenShown: false,
+      permissionDeniedDate: null,
 
       setMood: (mood) => set({ selectedMood: mood }),
 
@@ -176,6 +184,8 @@ export const useAppStore = create<AppState>()(
       setLastNotificationTime: (ts) => set({ lastNotificationTime: ts }),
       setComebackSentDate: (date) => set({ comebackSentDate: date }),
       setNotificationsEnabled: (enabled) => set({ notificationsEnabled: enabled }),
+      setPermissionScreenShown: (shown) => set({ permissionScreenShown: shown }),
+      setPermissionDeniedDate: (date) => set({ permissionDeniedDate: date }),
     }),
     {
       name: 'quran-companion-storage',
@@ -190,6 +200,8 @@ export const useAppStore = create<AppState>()(
         lastNotificationTime: s.lastNotificationTime,
         comebackSentDate: s.comebackSentDate,
         notificationsEnabled: s.notificationsEnabled,
+        permissionScreenShown: s.permissionScreenShown,
+        permissionDeniedDate: s.permissionDeniedDate,
       }),
     }
   )
