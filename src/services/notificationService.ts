@@ -30,15 +30,19 @@ export type NotificationType = 'streak' | 'emotion' | 'night' | 'comeback';
 
 export interface NotificationPayload {
   type: NotificationType;
+  /** Headline shown in both collapsed and expanded views */
   title: string;
+  /** Richer line shown in expanded view (iOS subtitle / Android second line) */
+  subtitle: string;
+  /** Short body shown in collapsed view */
   body: string;
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const QUIET_START_HOUR = 22;  // 10:30 PM
-const QUIET_START_MIN  = 30;
-const QUIET_END_HOUR   = 6;   // 6:30 AM
+const QUIET_START_HOUR = 22;  // 10:00 PM
+const QUIET_START_MIN  = 0;
+const QUIET_END_HOUR   = 5;   // 5:30 AM
 const QUIET_END_MIN    = 30;
 
 const NIGHT_REMIND_START_HOUR = 20; // 8:00 PM
@@ -51,26 +55,31 @@ const MS_48H = 48 * 60 * 60 * 1000;
 
 // ─── Emotion messages ─────────────────────────────────────────────────────────
 
-const EMOTION_MESSAGES: Record<Mood, { title: string; body: string }> = {
+const EMOTION_MESSAGES: Record<Mood, { title: string; subtitle: string; body: string }> = {
   Stressed: {
-    title: 'Feeling overwhelmed? 🌿',
-    body: 'A calming ayah is waiting — take one quiet moment.',
+    title: 'Feeling overwhelmed?',
+    subtitle: 'Take a moment for your heart.',
+    body: 'A calming ayah is waiting for you. 🌿',
   },
   Sad: {
     title: 'Your heart needs rest 💙',
-    body: 'The Quran has a word just for you today.',
+    subtitle: 'The Quran holds comfort for every sadness.',
+    body: 'A gentle ayah is waiting for you.',
   },
   Angry: {
     title: 'Breathe for a moment 🕊️',
-    body: 'A gentle reminder is here whenever you\'re ready.',
+    subtitle: 'Let the Quran soften what feels heavy.',
+    body: 'A calming reminder is here whenever you\'re ready.',
   },
   Confused: {
     title: 'Seeking clarity? ✨',
-    body: 'An ayah to guide your thoughts is waiting.',
+    subtitle: 'Let an ayah guide your thoughts today.',
+    body: 'Open the app — your answer might be waiting.',
   },
   'Need Motivation': {
     title: 'You can do this 🌱',
-    body: 'A short ayah to lift your spirit — just a moment.',
+    subtitle: 'A short ayah to lift your spirit.',
+    body: 'Take one quiet moment — it\'s enough.',
   },
 };
 
@@ -87,7 +96,7 @@ function daysBetween(dateStrA: string, dateStrB: string): number {
 }
 
 /**
- * Returns true if current time is inside quiet hours (10:30 PM – 6:30 AM).
+ * Returns true if current time is inside quiet hours (10:00 PM – 5:30 AM).
  */
 function isQuietHours(): boolean {
   const now = new Date();
@@ -143,7 +152,13 @@ async function sendLocalNotification(payload: NotificationPayload): Promise<void
   await Notifications.scheduleNotificationAsync({
     content: {
       title: payload.title,
-      body: payload.body,
+      // subtitle shows in iOS expanded view; on Android it appears as a second line
+      subtitle: payload.subtitle,
+      // body is the short collapsed line; on Android we append subtitle so
+      // the expanded BigText view shows the richer message
+      body: Platform.OS === 'android'
+        ? `${payload.subtitle}\n${payload.body}`
+        : payload.body,
       data: { type: payload.type, screen: 'Home' },
       sound: false,
     },
@@ -154,11 +169,11 @@ async function sendLocalNotification(payload: NotificationPayload): Promise<void
 // ─── Decision Engine ──────────────────────────────────────────────────────────
 
 export interface NotificationContext {
-  lastActiveDate: string | null;       // ISO date user last opened app
+  lastActiveDate: string | null;
   streak: number;
   selectedMood: Mood | null;
-  lastNotificationTime: number | null; // unix ms
-  comebackSentDate: string | null;     // ISO date comeback was last sent
+  lastNotificationTime: number | null;
+  comebackSentDate: string | null;
   notificationsEnabled: boolean;
 }
 
@@ -207,7 +222,8 @@ export async function evaluateAndSendNotification(
       await sendLocalNotification({
         type: 'comeback',
         title: 'Start again today 🌱',
-        body: 'Every small step towards the Quran brings peace.',
+        subtitle: "It's okay, we all take breaks.",
+        body: 'Come back today and reconnect with the Quran.',
       });
       return 'comeback';
     }
@@ -217,8 +233,9 @@ export async function evaluateAndSendNotification(
   if (streak > 0 && inactiveDays >= 1) {
     await sendLocalNotification({
       type: 'streak',
-      title: "🔥 Don't break your streak",
-      body: 'Read one ayah today — your heart will thank you.',
+      title: "🔥 Don't break your streak!",
+      subtitle: `You've built a ${streak}-day streak. Keep your journey alive.`,
+      body: 'Read one ayah today to keep it going.',
     });
     return 'streak';
   }
@@ -229,6 +246,7 @@ export async function evaluateAndSendNotification(
     await sendLocalNotification({
       type: 'emotion',
       title: msg.title,
+      subtitle: msg.subtitle,
       body: msg.body,
     });
     return 'emotion';
@@ -239,6 +257,7 @@ export async function evaluateAndSendNotification(
     await sendLocalNotification({
       type: 'night',
       title: 'End your day with peace 🌙',
+      subtitle: 'Let the words of Allah bring you peace tonight.',
       body: 'Read a short ayah before you sleep.',
     });
     return 'night';
