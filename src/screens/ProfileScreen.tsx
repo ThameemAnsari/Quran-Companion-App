@@ -6,13 +6,30 @@ import {
   SafeAreaView,
   ScrollView,
   TouchableOpacity,
+  Switch,
   StatusBar,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppStore } from '../store/useAppStore';
+import {
+  requestNotificationPermission,
+  cancelAllNotifications,
+  scheduleDailyEvaluationTrigger,
+} from '../services/notificationService';
 
 export const ProfileScreen: React.FC = () => {
-  const { streak, weekStats, bookmarks, reflections } = useAppStore();
+  const { streak, weekStats, bookmarks, reflections, notificationsEnabled, setNotificationsEnabled } = useAppStore();
+
+  async function handleToggleReminders(value: boolean) {
+    if (value) {
+      const granted = await requestNotificationPermission();
+      if (!granted) return;
+      await scheduleDailyEvaluationTrigger(18, 0);
+    } else {
+      await cancelAllNotifications();
+    }
+    setNotificationsEnabled(value);
+  }
 
   function formatTime(minutes: number): string {
     if (minutes < 60) return `${minutes}m`;
@@ -21,14 +38,21 @@ export const ProfileScreen: React.FC = () => {
     return `${h}h${m > 0 ? ` ${m}m` : ''}`;
   }
 
-  const menuItems = [
-    { icon: 'notifications-outline', label: 'Daily Reminders', sub: 'Set daily Quran reminder' },
-    { icon: 'language-outline', label: 'Translation Language', sub: 'English (Clear Quran)' },
+  type MenuItem = {
+    icon: string;
+    label: string;
+    sub: string;
+    toggle?: boolean;
+  };
+
+  const menuItems: MenuItem[] = [
+    { icon: 'notifications-outline', label: 'Daily Reminders', sub: notificationsEnabled ? 'Enabled' : 'Tap to enable', toggle: true },
+    { icon: 'language-outline', label: 'Translation Language', sub: 'English (Sahih International)' },
     { icon: 'musical-notes-outline', label: 'Reciter', sub: 'Mishary Alafasy' },
     { icon: 'moon-outline', label: 'Dark Mode', sub: 'Coming soon' },
     { icon: 'share-outline', label: 'Share App', sub: 'Share with friends' },
     { icon: 'information-circle-outline', label: 'About', sub: 'Version 1.1.0' },
-  ] as const;
+  ];
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -65,7 +89,11 @@ export const ProfileScreen: React.FC = () => {
         <View style={styles.menu}>
           {menuItems.map((item, i) => (
             <React.Fragment key={item.label}>
-              <TouchableOpacity style={styles.menuItem} activeOpacity={0.7}>
+              <TouchableOpacity
+                style={styles.menuItem}
+                activeOpacity={item.toggle ? 1 : 0.7}
+                onPress={item.toggle ? undefined : undefined}
+              >
                 <View style={styles.menuIconWrap}>
                   <Ionicons name={item.icon as any} size={20} color="#2E7D32" />
                 </View>
@@ -73,7 +101,16 @@ export const ProfileScreen: React.FC = () => {
                   <Text style={styles.menuLabel}>{item.label}</Text>
                   <Text style={styles.menuSub}>{item.sub}</Text>
                 </View>
-                <Ionicons name="chevron-forward" size={16} color="#D1D5DB" />
+                {item.toggle ? (
+                  <Switch
+                    value={notificationsEnabled}
+                    onValueChange={handleToggleReminders}
+                    trackColor={{ false: '#E5E7EB', true: '#A5D6A7' }}
+                    thumbColor={notificationsEnabled ? '#2E7D32' : '#9CA3AF'}
+                  />
+                ) : (
+                  <Ionicons name="chevron-forward" size={16} color="#D1D5DB" />
+                )}
               </TouchableOpacity>
               {i < menuItems.length - 1 && <View style={styles.menuDivider} />}
             </React.Fragment>

@@ -22,6 +22,14 @@ interface AppState {
   /** Per-day stats keyed by ISO date string "YYYY-MM-DD" */
   dailyStats: Record<string, WeekStats>;
 
+  // ── notifications
+  /** Unix timestamp (ms) of the last notification sent */
+  lastNotificationTime: number | null;
+  /** ISO date of the comeback notification send — for 2-day pause logic */
+  comebackSentDate: string | null;
+  /** Whether the user enabled daily reminders in Profile settings */
+  notificationsEnabled: boolean;
+
   // ── actions
   setMood: (mood: Mood) => void;
   setCurrentAyah: (ayah: Ayah) => void;
@@ -38,6 +46,11 @@ interface AppState {
   addTimeSpent: (minutes: number) => void;
   checkAndUpdateStreak: () => void;
   getDayStats: (dateStr: string) => WeekStats;
+
+  // ── notification actions
+  setLastNotificationTime: (ts: number) => void;
+  setComebackSentDate: (date: string) => void;
+  setNotificationsEnabled: (enabled: boolean) => void;
 }
 
 const todayStr = () => new Date().toISOString().split('T')[0];
@@ -59,6 +72,9 @@ export const useAppStore = create<AppState>()(
         timeSpentMinutes: 0,
       },
       dailyStats: {},
+      lastNotificationTime: null,
+      comebackSentDate: null,
+      notificationsEnabled: false,
 
       setMood: (mood) => set({ selectedMood: mood }),
 
@@ -156,6 +172,10 @@ export const useAppStore = create<AppState>()(
         const { dailyStats } = get();
         return dailyStats[dateStr] ?? { ayahsRead: 0, reflections: 0, bookmarks: 0, timeSpentMinutes: 0 };
       },
+
+      setLastNotificationTime: (ts) => set({ lastNotificationTime: ts }),
+      setComebackSentDate: (date) => set({ comebackSentDate: date }),
+      setNotificationsEnabled: (enabled) => set({ notificationsEnabled: enabled }),
     }),
     {
       name: 'quran-companion-storage',
@@ -167,6 +187,9 @@ export const useAppStore = create<AppState>()(
         lastActiveDate: s.lastActiveDate,
         weekStats: s.weekStats,
         dailyStats: s.dailyStats,
+        lastNotificationTime: s.lastNotificationTime,
+        comebackSentDate: s.comebackSentDate,
+        notificationsEnabled: s.notificationsEnabled,
       }),
     }
   )
