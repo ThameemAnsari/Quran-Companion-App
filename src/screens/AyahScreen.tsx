@@ -26,7 +26,7 @@ type Props = CompositeScreenProps<
 
 export const AyahScreen: React.FC<Props> = ({ navigation }) => {
   const { currentAyah, nextAyah, addBookmark, removeBookmark, isBookmarked, incrementAyahsRead, addTimeSpent,
-    permissionScreenShown, notificationsEnabled, weekStats } =
+    permissionScreenShown, notificationsEnabled, weekStats, permissionDeniedDate } =
     useAppStore();
   const [showExplanation, setShowExplanation] = useState(true);
   const [showPermissionModal, setShowPermissionModal] = useState(false);
@@ -62,12 +62,20 @@ export const AyahScreen: React.FC<Props> = ({ navigation }) => {
     if (currentAyah) incrementAyahsRead();
   }, [currentAyah?.verseKey]);
 
-  // Show pre-permission screen after user reads first ayah (~30s in)
-  // Trigger once: only if not already shown and notifications not yet enabled
+  // Show pre-permission screen after user reads first ayah (~30s in).
+  // Re-show after 2 days if user previously tapped "Maybe Later".
   useEffect(() => {
-    if (permissionScreenShown || notificationsEnabled) return;
+    if (notificationsEnabled) return;
     if (weekStats.ayahsRead < 1) return;
-    // 30-second delay so the user is engaged before we ask
+
+    if (permissionScreenShown) {
+      // Re-ask only if user tapped "Maybe Later" and 2+ days have passed
+      if (!permissionDeniedDate) return;
+      const daysPassed =
+        (Date.now() - new Date(permissionDeniedDate).getTime()) / (1000 * 60 * 60 * 24);
+      if (daysPassed < 2) return;
+    }
+
     permTimerRef.current = setTimeout(() => {
       setShowPermissionModal(true);
     }, 30_000);
