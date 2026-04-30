@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import type { Ayah, Mood, Reflection, WeekStats } from '../types';
+import type { Ayah, Mood, Reflection, WeekStats, Collection } from '../types';
 import { fetchMoreAyahsForMood } from '../services/aiService';
 
 interface AppState {
@@ -13,6 +13,9 @@ interface AppState {
   fetchAttempt: number;
   hasMoreAyahs: boolean;
   isFetchingMore: boolean;
+
+  // ── collections
+  collections: Collection[];
 
   // ── bookmarks
   bookmarks: Ayah[];
@@ -51,6 +54,12 @@ interface AppState {
 
   addReflection: (reflection: Reflection) => void;
 
+  createCollection: (name: string, emoji: string) => Collection;
+  addAyahToCollection: (collectionId: string, ayah: Ayah) => void;
+  removeAyahFromCollection: (collectionId: string, verseKey: string) => void;
+  deleteCollection: (collectionId: string) => void;
+  touchCollection: (collectionId: string) => void;
+
   incrementAyahsRead: () => void;
   addTimeSpent: (minutes: number) => void;
   checkAndUpdateStreak: () => void;
@@ -77,6 +86,7 @@ export const useAppStore = create<AppState>()(
       hasMoreAyahs: true,
       isFetchingMore: false,
       bookmarks: [],
+      collections: [],
       reflections: [],
       streak: 0,
       lastActiveDate: null,
@@ -143,7 +153,7 @@ export const useAppStore = create<AppState>()(
         const today = todayStr();
         const prev = dailyStats[today] ?? { ayahsRead: 0, reflections: 0, bookmarks: 0, timeSpentMinutes: 0 };
         set({
-          bookmarks: [...bookmarks, ayah],
+          bookmarks: [...bookmarks, { ...ayah, savedAt: today }],
           weekStats: { ...weekStats, bookmarks: weekStats.bookmarks + 1 },
           dailyStats: { ...dailyStats, [today]: { ...prev, bookmarks: prev.bookmarks + 1 } },
         });
@@ -177,6 +187,49 @@ export const useAppStore = create<AppState>()(
             dailyStats: { ...s.dailyStats, [today]: { ...prev, reflections: prev.reflections + 1 } },
           };
         }),
+
+      createCollection: (name, emoji) => {
+        const newCol: Collection = {
+          id: `col-${Date.now()}`,
+          name,
+          emoji,
+          ayahs: [],
+          createdAt: new Date().toISOString(),
+          lastOpenedAt: new Date().toISOString(),
+        };
+        set((s) => ({ collections: [newCol, ...s.collections] }));
+        return newCol;
+      },
+
+      addAyahToCollection: (collectionId, ayah) =>
+        set((s) => ({
+          collections: s.collections.map((c) =>
+            c.id !== collectionId
+              ? c
+              : c.ayahs.find((a) => a.verseKey === ayah.verseKey)
+              ? c
+              : { ...c, ayahs: [...c.ayahs, ayah] }
+          ),
+        })),
+
+      removeAyahFromCollection: (collectionId, verseKey) =>
+        set((s) => ({
+          collections: s.collections.map((c) =>
+            c.id !== collectionId
+              ? c
+              : { ...c, ayahs: c.ayahs.filter((a) => a.verseKey !== verseKey) }
+          ),
+        })),
+
+      deleteCollection: (collectionId) =>
+        set((s) => ({ collections: s.collections.filter((c) => c.id !== collectionId) })),
+
+      touchCollection: (collectionId) =>
+        set((s) => ({
+          collections: s.collections.map((c) =>
+            c.id === collectionId ? { ...c, lastOpenedAt: new Date().toISOString() } : c
+          ),
+        })),
 
       incrementAyahsRead: () =>
         set((s) => {

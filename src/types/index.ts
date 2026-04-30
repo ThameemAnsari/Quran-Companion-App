@@ -48,6 +48,7 @@ export interface Ayah {
   audioUrl: string;
   theme?: string;
   explanation?: string;
+  savedAt?: string;        // ISO date string set when bookmarked
 }
 
 export interface Reflection {
@@ -56,6 +57,15 @@ export interface Reflection {
   lesson: string;
   application: string;
   createdAt: string;
+}
+
+export interface Collection {
+  id: string;
+  name: string;
+  emoji: string;
+  ayahs: Ayah[];
+  createdAt: string;
+  lastOpenedAt: string;
 }
 
 export interface WeekStats {
@@ -94,15 +104,13 @@ export type RootStackParamList = {
   Loading: { mood: Mood };
   Main: undefined;
   Reflection: { ayah: Ayah };
-};
-
-export type ForYouTabParamList = {
-  AyahScreen: undefined;
+  CollectionDetail: { collectionId: string };
+  CreateCollection: { ayahToAdd?: Ayah };
 };
 
 export type MainTabParamList = {
   ForYou: undefined;
-  Bookmarks: undefined;
+  Collections: undefined;
   Progress: undefined;
   Profile: undefined;
 };

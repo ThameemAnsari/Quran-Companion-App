@@ -12,7 +12,99 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppStore } from '../store/useAppStore';
-import type { WeekStats } from '../types';
+import { AudioPlayer } from '../components/AudioPlayer';
+import { buildAudioUrl } from '../services/quranApi';
+import type { Ayah, WeekStats } from '../types';
+
+// ─── Reflection card ─────────────────────────────────────────────────────────
+function ReflectionCard({ item }: { item: import('../types').Reflection }) {
+  const [open, setOpen] = useState(false);
+  const date = new Date(item.createdAt).toLocaleDateString('en-US', {
+    month: 'short', day: 'numeric', year: 'numeric',
+  });
+  return (
+    <View style={styles.detailCard}>
+      <TouchableOpacity
+        style={styles.bookmarkRow}
+        activeOpacity={0.75}
+        onPress={() => setOpen((v) => !v)}
+      >
+        <View style={[styles.bookmarkIcon, { backgroundColor: '#F5F3FF' }]}>
+          <Text style={{ fontSize: 22 }}>✍️</Text>
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.detailVerse}>{item.ayah.surahName} · {item.ayah.verseKey}</Text>
+          <Text style={styles.cardPreviewText} numberOfLines={1}>
+            {item.lesson || item.application || 'Reflection saved'}
+          </Text>
+        </View>
+        <Ionicons name={open ? 'chevron-up' : 'chevron-down'} size={16} color="#D1D5DB" />
+      </TouchableOpacity>
+      {open && (
+        <View style={styles.bookmarkExpanded}>
+          <View style={styles.detailDivider} />
+          {/* Ayah Arabic + Translation */}
+          <Text style={styles.arabicSnippet}>{item.ayah.arabicText}</Text>
+          <View style={styles.detailDivider} />
+          <Text style={styles.detailText}>{item.ayah.translation}</Text>
+          <View style={styles.detailDivider} />
+          {/* Reflection notes */}
+          {!!item.lesson && (
+            <>
+              <Text style={styles.reflectionLabel}>What did you learn from this ayah?</Text>
+              <Text style={styles.detailText}>{item.lesson}</Text>
+            </>
+          )}
+          {!!item.application && (
+            <>
+              <Text style={[styles.reflectionLabel, { marginTop: 10 }]}>How does this apply to your life?</Text>
+              <Text style={styles.detailApplication}>{item.application}</Text>
+            </>
+          )}
+          <Text style={styles.detailDate}>{date}</Text>
+        </View>
+      )}
+    </View>
+  );
+}
+
+// ─── Bookmark card (needs own component to use useState) ──────────────────────
+function BookmarkCard({ item, onRemove }: { item: Ayah; onRemove: () => void }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <View style={styles.detailCard}>
+      <TouchableOpacity
+        style={styles.bookmarkRow}
+        activeOpacity={0.75}
+        onPress={() => setOpen((v) => !v)}
+      >
+        <View style={styles.bookmarkIcon}>
+          <Text style={{ fontSize: 22 }}>📖</Text>
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.detailVerse}>{item.surahName} · {item.verseKey}</Text>
+          <Text style={styles.cardPreviewText} numberOfLines={1}>{item.translation}</Text>
+        </View>
+        <Ionicons name={open ? 'chevron-up' : 'chevron-down'} size={16} color="#D1D5DB" />
+      </TouchableOpacity>
+      {open && (
+        <View style={styles.bookmarkExpanded}>
+          <View style={styles.detailDivider} />
+          <Text style={styles.arabicSnippet}>{item.arabicText}</Text>
+          <View style={styles.detailDivider} />
+          <Text style={styles.detailText}>{item.translation}</Text>
+          <View style={{ marginTop: 14 }}>
+            <AudioPlayer audioUrl={item.audioUrl || buildAudioUrl(item.surahNumber, item.verseNumber)} />
+          </View>
+          <TouchableOpacity style={styles.bookmarkDeleteBtn} onPress={onRemove}>
+            <Ionicons name="trash-outline" size={16} color="#EF4444" />
+            <Text style={styles.bookmarkDeleteText}>Remove Bookmark</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+    </View>
+  );
+}
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type Filter = 'week' | 'month' | 'alltime';
@@ -54,12 +146,13 @@ function getDayStatus(stats?: WeekStats): DayStatus {
 }
 
 function formatDisplayDate(dateStr: string): string {
-  const today = isoDate(new Date());
-  const yd = new Date();
-  yd.setDate(yd.getDate() - 1);
+  const today = new Date().toISOString().split('T')[0];
+  const ydDate = new Date();
+  ydDate.setUTCDate(ydDate.getUTCDate() - 1);
+  const yesterday = ydDate.toISOString().split('T')[0];
   if (dateStr === today) return 'Today';
-  if (dateStr === isoDate(yd)) return 'Yesterday';
-  return new Date(dateStr + 'T00:00:00').toLocaleDateString(undefined, {
+  if (dateStr === yesterday) return 'Yesterday';
+  return new Date(dateStr + 'T12:00:00Z').toLocaleDateString(undefined, {
     month: 'short',
     day: 'numeric',
   });
@@ -68,7 +161,7 @@ function formatDisplayDate(dateStr: string): string {
 
 // ─── Component ────────────────────────────────────────────────────────────────
 export const ProgressScreen: React.FC = () => {
-  const { streak, dailyStats, reflections, bookmarks } = useAppStore();
+  const { streak, dailyStats, reflections, bookmarks, removeBookmark } = useAppStore();
   const [filter, setFilter] = useState<Filter>('week');
   const [expandedStat, setExpandedStat] = useState<StatKey | null>(null);
 
@@ -76,23 +169,23 @@ export const ProgressScreen: React.FC = () => {
 
   // ── Date arrays per filter ────────────────────────────────────────
   const weekDates = useMemo<string[]>(() => {
-    const d = new Date(todayStr + 'T00:00:00');
-    const dow = d.getDay();
+    const base = new Date(todayStr + 'T00:00:00Z');
+    const dow = base.getUTCDay(); // 0=Sun … 6=Sat, UTC-consistent
     return Array.from({ length: 7 }, (_, i) => {
-      const dd = new Date(d);
-      dd.setDate(d.getDate() - dow + i);
-      return isoDate(dd);
+      const d = new Date(base);
+      d.setUTCDate(base.getUTCDate() - dow + i);
+      return d.toISOString().split('T')[0];
     });
   }, [todayStr]);
 
   const monthDates = useMemo<string[]>(() => {
-    const d = new Date();
-    const start = new Date(d.getFullYear(), d.getMonth(), 1);
+    const base = new Date(todayStr + 'T00:00:00Z');
+    const firstDay = new Date(Date.UTC(base.getUTCFullYear(), base.getUTCMonth(), 1));
     const days: string[] = [];
-    const cur = new Date(start);
-    while (isoDate(cur) <= todayStr) {
-      days.push(isoDate(cur));
-      cur.setDate(cur.getDate() + 1);
+    const cur = new Date(firstDay);
+    while (cur.toISOString().split('T')[0] <= todayStr) {
+      days.push(cur.toISOString().split('T')[0]);
+      cur.setUTCDate(cur.getUTCDate() + 1);
     }
     return days;
   }, [todayStr]);
@@ -115,17 +208,14 @@ export const ProgressScreen: React.FC = () => {
   const weekCompleted = weekDates.filter((d) => (dailyStats[d]?.ayahsRead ?? 0) > 0).length;
   const weekTotal = weekDates.filter((d) => d <= todayStr).length;
 
-  // ── History timeline (newest first) ──────────────────────────────
-  const historyCount = filter === 'week' ? 7 : 30;
-  const historyDays = useMemo(() => {
-    const base = new Date(todayStr + 'T00:00:00');
-    return Array.from({ length: historyCount }, (_, i) => {
-      const d = new Date(base);
-      d.setDate(base.getDate() - i);
-      const ds = isoDate(d);
-      return { dateStr: ds, stats: dailyStats[ds], status: getDayStatus(dailyStats[ds]) };
-    });
-  }, [filter, dailyStats, todayStr, historyCount]);
+  // ── History timeline: mirrors activeDates (newest first) ─────────
+  const historyDays = useMemo(() =>
+    [...activeDates]
+      .filter((ds) => ds <= todayStr)
+      .reverse()
+      .map((ds) => ({ dateStr: ds, stats: dailyStats[ds], status: getDayStatus(dailyStats[ds]) })),
+    [activeDates, dailyStats, todayStr]
+  );
 
   // ── Calendar row ──────────────────────────────────────────────────
   const calendarDays = weekDates.map((ds, i) => ({
@@ -147,8 +237,12 @@ export const ProgressScreen: React.FC = () => {
     [reflections, filter, activeDates]
   );
 
-  // Always use live bookmarks.length — dailyStats can drift due to removals.
-  const bookmarkCount = bookmarks.length;
+  // Bookmark count: filter live bookmarks by savedAt for period accuracy.
+  // Bookmarks without savedAt (legacy) count toward all periods.
+  const bookmarkCount = useMemo(() => {
+    if (filter === 'alltime') return bookmarks.length;
+    return bookmarks.filter((b) => !b.savedAt || activeDates.includes(b.savedAt)).length;
+  }, [bookmarks, filter, activeDates]);
 
   // ── Stat cards ────────────────────────────────────────────────────
   const statCards: { key: StatKey; icon: string; label: string; color: string; value: string | number }[] = [
@@ -162,11 +256,6 @@ export const ProgressScreen: React.FC = () => {
     expandedStat === 'ayahsRead' ? 'Ayahs Read' :
     expandedStat === 'reflections' ? 'Reflections' :
     expandedStat === 'bookmarks' ? 'Bookmarks' : 'Time Spent';
-
-  const dailyDetailData = useMemo(
-    () => [...activeDates].reverse().filter((d) => dailyStats[d] && d <= todayStr),
-    [activeDates, dailyStats, todayStr]
-  );
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -403,14 +492,7 @@ export const ProgressScreen: React.FC = () => {
               keyExtractor={(item) => item.id}
               contentContainerStyle={styles.modalContent}
               ListEmptyComponent={<Text style={styles.emptyModal}>No reflections for this period.</Text>}
-              renderItem={({ item }) => (
-                <View style={styles.detailCard}>
-                  <Text style={styles.detailVerse}>{item.ayah.surahName} · {item.ayah.verseKey}</Text>
-                  <Text style={styles.detailText}>{item.lesson}</Text>
-                  {!!item.application && <Text style={styles.detailApplication}>{item.application}</Text>}
-                  <Text style={styles.detailDate}>{formatDisplayDate(item.createdAt?.split('T')[0] ?? '')}</Text>
-                </View>
-              )}
+              renderItem={({ item }) => <ReflectionCard item={item} />}
             />
           )}
 
@@ -420,13 +502,7 @@ export const ProgressScreen: React.FC = () => {
               keyExtractor={(item) => item.verseKey}
               contentContainerStyle={styles.modalContent}
               ListEmptyComponent={<Text style={styles.emptyModal}>No bookmarks yet.</Text>}
-              renderItem={({ item }) => (
-                <View style={styles.detailCard}>
-                  <Text style={styles.detailVerse}>{item.surahName} · {item.verseKey}</Text>
-                  <Text style={styles.arabicSnippet}>{item.arabicText}</Text>
-                  <Text style={styles.detailText} numberOfLines={3}>{item.translation}</Text>
-                </View>
-              )}
+              renderItem={({ item }) => <BookmarkCard item={item} onRemove={() => removeBookmark(item.verseKey)} />}
             />
           )}
         </SafeAreaView>
@@ -536,7 +612,39 @@ const styles = StyleSheet.create({
   detailText: { fontSize: 14, color: '#374151', lineHeight: 20 },
   detailApplication: { fontSize: 13, color: '#6B7280', fontStyle: 'italic', lineHeight: 18 },
   detailDate: { fontSize: 12, color: '#9CA3AF', marginTop: 4 },
-  arabicSnippet: { fontSize: 18, textAlign: 'right', color: '#1B1B1B', lineHeight: 30 },
+  arabicSnippet: { fontSize: 18, textAlign: 'right', color: '#1B1B1B', lineHeight: 34 },
+  bookmarkRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  bookmarkIcon: {
+    width: 44, height: 44, borderRadius: 12, backgroundColor: '#F0FDF4',
+    alignItems: 'center', justifyContent: 'center',
+  },
+  bookmarkExpanded: { paddingTop: 4 },
+  reflectionLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#9CA3AF',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 4,
+  },
+  bookmarkDeleteBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 14,
+    alignSelf: 'flex-start',
+    backgroundColor: '#FEF2F2',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 10,
+  },
+  bookmarkDeleteText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#EF4444',
+  },
+  cardPreviewText: { fontSize: 12, color: '#9CA3AF', marginTop: 2 },
+  detailDivider: { height: 1, backgroundColor: '#F3F4F6', marginVertical: 10 },
   dayDetailRow: {
     backgroundColor: '#fff', borderRadius: 12, padding: 14, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
     shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.04, shadowRadius: 4, elevation: 1,

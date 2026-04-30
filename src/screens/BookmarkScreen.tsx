@@ -11,9 +11,129 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppStore } from '../store/useAppStore';
+import { AudioPlayer } from '../components/AudioPlayer';
+import { buildAudioUrl } from '../services/quranApi';
 import type { Ayah, Reflection } from '../types';
 
 type TabType = 'Ayahs' | 'Reflections';
+
+function AyahRow({
+  item,
+  onRemove,
+}: {
+  item: Ayah;
+  onRemove: () => void;
+}) {
+  const [expanded, setExpanded] = useState(false);
+
+  return (
+    <View style={styles.card}>
+      <TouchableOpacity
+        style={styles.cardRow}
+        activeOpacity={0.75}
+        onPress={() => setExpanded((v) => !v)}
+      >
+        <View style={styles.cardIcon}>
+          <Text style={styles.cardEmoji}>📖</Text>
+        </View>
+        <View style={styles.cardBody}>
+          <Text style={styles.cardName}>{item.surahName}</Text>
+          <Text style={styles.cardMeta}>{item.verseKey}</Text>
+          <Text style={styles.cardPreview} numberOfLines={1}>
+            {item.translation}
+          </Text>
+        </View>
+        <View style={styles.cardRight}>
+          <Ionicons
+            name={expanded ? 'chevron-up' : 'chevron-down'}
+            size={16}
+            color="#D1D5DB"
+          />
+        </View>
+      </TouchableOpacity>
+
+      {expanded && (
+        <View style={styles.expandedSection}>
+          <View style={styles.divider} />
+          <Text style={styles.arabicText}>{item.arabicText}</Text>
+          <View style={styles.divider} />
+          <Text style={styles.translationText}>{item.translation}</Text>
+          <View style={styles.audioWrapper}>
+            <AudioPlayer audioUrl={item.audioUrl || buildAudioUrl(item.surahNumber, item.verseNumber)} />
+          </View>
+          <TouchableOpacity style={styles.deleteBtn} onPress={onRemove}>
+            <Ionicons name="trash-outline" size={16} color="#EF4444" />
+            <Text style={styles.deleteBtnText}>Remove Bookmark</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+    </View>
+  );
+}
+
+function ReflectionRow({ item }: { item: Reflection }) {
+  const [expanded, setExpanded] = useState(false);
+
+  const date = new Date(item.createdAt).toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  });
+
+  return (
+    <View style={styles.card}>
+      <TouchableOpacity
+        style={styles.cardRow}
+        activeOpacity={0.75}
+        onPress={() => setExpanded((v) => !v)}
+      >
+        <View style={styles.cardIcon}>
+          <Text style={styles.cardEmoji}>✍️</Text>
+        </View>
+        <View style={styles.cardBody}>
+          <Text style={styles.cardName}>{item.ayah.surahName}</Text>
+          <Text style={styles.cardMeta}>{item.ayah.verseKey}</Text>
+          <Text style={styles.cardPreview} numberOfLines={1}>
+            {item.lesson || item.application || 'Reflection saved'}
+          </Text>
+        </View>
+        <View style={styles.cardRight}>
+          <Text style={styles.cardDate}>{date}</Text>
+          <Ionicons
+            name={expanded ? 'chevron-up' : 'chevron-down'}
+            size={16}
+            color="#D1D5DB"
+            style={{ marginTop: 6 }}
+          />
+        </View>
+      </TouchableOpacity>
+
+      {expanded && (
+        <View style={styles.expandedSection}>
+          <View style={styles.divider} />
+          {/* Ayah Arabic + Translation */}
+          <Text style={styles.arabicText}>{item.ayah.arabicText}</Text>
+          <View style={styles.divider} />
+          <Text style={styles.translationText}>{item.ayah.translation}</Text>
+          <View style={styles.divider} />
+          {/* Reflection notes */}
+          {!!item.lesson && (
+            <>
+              <Text style={styles.reflectionQ}>What I learned</Text>
+              <Text style={styles.reflectionA}>{item.lesson}</Text>
+            </>
+          )}
+          {!!item.application && (
+            <>
+              <Text style={[styles.reflectionQ, { marginTop: 10 }]}>How it applies</Text>
+              <Text style={styles.reflectionA}>{item.application}</Text>
+            </>
+          )}
+        </View>
+      )}
+    </View>
+  );
+}
 
 export const BookmarkScreen: React.FC = () => {
   const { bookmarks, reflections, removeBookmark } = useAppStore();
@@ -26,67 +146,11 @@ export const BookmarkScreen: React.FC = () => {
     ]);
   };
 
-  const renderAyah = ({ item }: { item: Ayah }) => (
-    <View style={styles.card}>
-      <View style={styles.cardHeader}>
-        <View style={styles.cardRef}>
-          <Text style={styles.cardRefText}>{item.surahName} ({item.verseKey})</Text>
-        </View>
-        <TouchableOpacity
-          onPress={() => handleRemove(item.verseKey)}
-          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-        >
-          <Ionicons name="bookmark" size={22} color="#2E7D32" />
-        </TouchableOpacity>
-      </View>
-      <Text style={styles.arabicText} numberOfLines={3}>
-        {item.arabicText}
-      </Text>
-      <Text style={styles.translationText} numberOfLines={2}>
-        {item.translation}
-      </Text>
-    </View>
-  );
-
-  const renderReflection = ({ item }: { item: Reflection }) => (
-    <View style={styles.card}>
-      <View style={styles.cardHeader}>
-        <View style={styles.cardRef}>
-          <Text style={styles.cardRefText}>
-            {item.ayah.surahName} ({item.ayah.verseKey})
-          </Text>
-        </View>
-        <Ionicons name="pencil" size={16} color="#9CA3AF" />
-      </View>
-      {!!item.lesson && (
-        <>
-          <Text style={styles.reflectionQ}>What I learned:</Text>
-          <Text style={styles.reflectionA} numberOfLines={2}>{item.lesson}</Text>
-        </>
-      )}
-      {!!item.application && (
-        <>
-          <Text style={[styles.reflectionQ, { marginTop: 8 }]}>How it applies:</Text>
-          <Text style={styles.reflectionA} numberOfLines={2}>{item.application}</Text>
-        </>
-      )}
-      <Text style={styles.dateText}>
-        {new Date(item.createdAt).toLocaleDateString('en-US', {
-          month: 'short',
-          day: 'numeric',
-          year: 'numeric',
-        })}
-      </Text>
-    </View>
-  );
-
   const emptyAyahs = (
     <View style={styles.empty}>
       <Text style={styles.emptyIcon}>🔖</Text>
       <Text style={styles.emptyTitle}>No bookmarks yet</Text>
-      <Text style={styles.emptyText}>
-        Tap the bookmark icon on any ayah to save it here.
-      </Text>
+      <Text style={styles.emptyText}>Tap the heart icon on any ayah to save it here.</Text>
     </View>
   );
 
@@ -94,21 +158,19 @@ export const BookmarkScreen: React.FC = () => {
     <View style={styles.empty}>
       <Text style={styles.emptyIcon}>✍️</Text>
       <Text style={styles.emptyTitle}>No reflections yet</Text>
-      <Text style={styles.emptyText}>
-        After reading an ayah, tap "Reflect" to journal your thoughts.
-      </Text>
+      <Text style={styles.emptyText}>After reading an ayah, tap "Reflect" to journal your thoughts.</Text>
     </View>
   );
 
   return (
     <SafeAreaView style={styles.safe}>
       <StatusBar barStyle="dark-content" backgroundColor="#F5F7F2" />
-      {/* Header */}
+
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Bookmarks</Text>
+        <Text style={styles.headerSubtitle}>Your saved ayahs & reflections</Text>
       </View>
 
-      {/* Tabs */}
       <View style={styles.tabs}>
         {(['Ayahs', 'Reflections'] as TabType[]).map((tab) => (
           <TouchableOpacity
@@ -123,12 +185,13 @@ export const BookmarkScreen: React.FC = () => {
         ))}
       </View>
 
-      {/* List */}
       {activeTab === 'Ayahs' ? (
         <FlatList
           data={bookmarks}
           keyExtractor={(item) => item.verseKey}
-          renderItem={renderAyah}
+          renderItem={({ item }) => (
+            <AyahRow item={item} onRemove={() => handleRemove(item.verseKey)} />
+          )}
           contentContainerStyle={[styles.list, bookmarks.length === 0 && styles.listEmpty]}
           ListEmptyComponent={emptyAyahs}
           showsVerticalScrollIndicator={false}
@@ -137,21 +200,11 @@ export const BookmarkScreen: React.FC = () => {
         <FlatList
           data={reflections}
           keyExtractor={(item) => item.id}
-          renderItem={renderReflection}
+          renderItem={({ item }) => <ReflectionRow item={item} />}
           contentContainerStyle={[styles.list, reflections.length === 0 && styles.listEmpty]}
           ListEmptyComponent={emptyReflections}
           showsVerticalScrollIndicator={false}
         />
-      )}
-
-      {/* Add Bookmark CTA */}
-      {activeTab === 'Ayahs' && bookmarks.length > 0 && (
-        <View style={styles.addBookmarkRow}>
-          <TouchableOpacity style={styles.addBookmarkBtn} activeOpacity={0.85}>
-            <Ionicons name="add" size={18} color="#fff" />
-            <Text style={styles.addBookmarkText}>Add New Bookmark</Text>
-          </TouchableOpacity>
-        </View>
       )}
     </SafeAreaView>
   );
@@ -161,13 +214,19 @@ const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: '#F5F7F2' },
   header: {
     paddingHorizontal: 20,
-    paddingVertical: 16,
+    paddingTop: 14,
+    paddingBottom: 10,
   },
   headerTitle: {
     fontSize: 24,
     fontWeight: '700',
     color: '#1B1B1B',
-    letterSpacing: -0.3,
+    letterSpacing: -0.4,
+  },
+  headerSubtitle: {
+    fontSize: 13,
+    color: '#6B7280',
+    marginTop: 2,
   },
   tabs: {
     flexDirection: 'row',
@@ -196,44 +255,94 @@ const styles = StyleSheet.create({
   card: {
     backgroundColor: '#fff',
     borderRadius: 16,
-    padding: 16,
     marginBottom: 12,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.06,
     shadowRadius: 8,
     elevation: 2,
+    overflow: 'hidden',
   },
-  cardHeader: {
+  cardRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 10,
+    padding: 16,
+    gap: 14,
   },
-  cardRef: {
-    backgroundColor: '#E8F5E9',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 20,
+  cardIcon: {
+    width: 52,
+    height: 52,
+    borderRadius: 14,
+    backgroundColor: '#F0FDF4',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  cardRefText: {
-    fontSize: 11,
+  cardEmoji: { fontSize: 26 },
+  cardBody: { flex: 1 },
+  cardName: {
+    fontSize: 16,
     fontWeight: '700',
+    color: '#1B1B1B',
+    marginBottom: 2,
+  },
+  cardMeta: {
+    fontSize: 13,
     color: '#2E7D32',
-    letterSpacing: 0.3,
+    fontWeight: '600',
+    marginBottom: 3,
+  },
+  cardPreview: {
+    fontSize: 12,
+    color: '#9CA3AF',
+    lineHeight: 17,
+  },
+  cardRight: {
+    alignItems: 'flex-end',
+    justifyContent: 'flex-start',
+  },
+  cardDate: {
+    fontSize: 11,
+    color: '#9CA3AF',
+  },
+  expandedSection: {
+    paddingHorizontal: 16,
+    paddingBottom: 16,
+  },
+  divider: {
+    height: 1,
+    backgroundColor: '#F3F4F6',
+    marginVertical: 12,
   },
   arabicText: {
-    fontSize: 20,
-    lineHeight: 36,
+    fontSize: 22,
+    lineHeight: 40,
     color: '#1B1B1B',
     textAlign: 'right',
     writingDirection: 'rtl',
-    marginBottom: 8,
   },
   translationText: {
+    fontSize: 14,
+    lineHeight: 22,
+    color: '#374151',
+  },
+  audioWrapper: {
+    marginTop: 14,
+  },
+  deleteBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 14,
+    alignSelf: 'flex-start',
+    backgroundColor: '#FEF2F2',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 10,
+  },
+  deleteBtnText: {
     fontSize: 13,
-    lineHeight: 20,
-    color: '#6B7280',
+    fontWeight: '600',
+    color: '#EF4444',
   },
   reflectionQ: {
     fontSize: 11,
@@ -241,50 +350,20 @@ const styles = StyleSheet.create({
     color: '#9CA3AF',
     textTransform: 'uppercase',
     letterSpacing: 0.5,
-    marginBottom: 3,
+    marginBottom: 4,
   },
   reflectionA: {
     fontSize: 14,
     color: '#374151',
-    lineHeight: 20,
-  },
-  dateText: {
-    fontSize: 11,
-    color: '#D1D5DB',
-    marginTop: 10,
-    textAlign: 'right',
+    lineHeight: 21,
   },
   empty: {
     alignItems: 'center',
     paddingHorizontal: 40,
-    paddingTop: 40,
+    paddingTop: 60,
+    gap: 10,
   },
-  emptyIcon: { fontSize: 52, marginBottom: 16 },
-  emptyTitle: { fontSize: 18, fontWeight: '700', color: '#1B1B1B', marginBottom: 8 },
+  emptyIcon: { fontSize: 52 },
+  emptyTitle: { fontSize: 18, fontWeight: '700', color: '#374151' },
   emptyText: { fontSize: 14, color: '#9CA3AF', textAlign: 'center', lineHeight: 20 },
-  addBookmarkRow: {
-    position: 'absolute',
-    bottom: 16,
-    left: 16,
-    right: 16,
-  },
-  addBookmarkBtn: {
-    backgroundColor: '#2E7D32',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    paddingVertical: 16,
-    borderRadius: 16,
-    shadowColor: '#2E7D32',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 10,
-    elevation: 4,
-  },
-  addBookmarkText: {
-    color: '#fff',
-    fontSize: 15,
-    fontWeight: '700',
-  },
 });

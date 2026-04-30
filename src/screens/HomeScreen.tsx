@@ -49,8 +49,11 @@ export const HomeScreen: React.FC<Props> = ({ navigation }) => {
 
         {/* Illustration / icon */}
         <View style={styles.illustrationContainer}>
-          <View style={styles.mosqueShadow} />
-          <Text style={styles.mosqueIcon}>🕌</Text>
+          <Image
+            source={require('../../assets/app_icon.png')}
+            style={styles.appIcon}
+            resizeMode="contain"
+          />
         </View>
 
         {/* Title */}
@@ -101,18 +104,11 @@ const styles = StyleSheet.create({
   illustrationContainer: {
     alignItems: 'center',
     marginBottom: 28,
-    position: 'relative',
   },
-  mosqueShadow: {
-    position: 'absolute',
-    bottom: -8,
-    width: 80,
-    height: 20,
-    borderRadius: 40,
-    backgroundColor: 'rgba(46,125,50,0.12)',
-  },
-  mosqueIcon: {
-    fontSize: 80,
+  appIcon: {
+    width: 110,
+    height: 110,
+    borderRadius: 26,
   },
   title: {
     fontSize: 26,

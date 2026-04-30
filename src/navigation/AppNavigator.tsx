@@ -13,7 +13,9 @@ import { HomeScreen } from '../screens/HomeScreen';
 import { LoadingScreen } from '../screens/LoadingScreen';
 import { AyahScreen } from '../screens/AyahScreen';
 import { ReflectionScreen } from '../screens/ReflectionScreen';
-import { BookmarkScreen } from '../screens/BookmarkScreen';
+import { CollectionsScreen } from '../screens/CollectionsScreen';
+import { CollectionDetailScreen } from '../screens/CollectionDetailScreen';
+import { CreateCollectionScreen } from '../screens/CreateCollectionScreen';
 import { ProgressScreen } from '../screens/ProgressScreen';
 import { ProfileScreen } from '../screens/ProfileScreen';
 
@@ -35,7 +37,7 @@ function MainTabs() {
         tabBarIcon: ({ color, size, focused }) => {
           const icons: Record<string, [string, string]> = {
             ForYou: ['home', 'home-outline'],
-            Bookmarks: ['bookmark', 'bookmark-outline'],
+            Collections: ['albums', 'albums-outline'],
             Progress: ['bar-chart', 'bar-chart-outline'],
             Profile: ['person', 'person-outline'],
           };
@@ -53,7 +55,7 @@ function MainTabs() {
       })}
     >
       <Tab.Screen name="ForYou" component={AyahScreen} options={{ title: 'Home' }} />
-      <Tab.Screen name="Bookmarks" component={BookmarkScreen} />
+      <Tab.Screen name="Collections" component={CollectionsScreen} options={{ title: 'Collections' }} />
       <Tab.Screen name="Progress" component={ProgressScreen} />
       <Tab.Screen name="Profile" component={ProfileScreen} />
     </Tab.Navigator>
@@ -92,6 +94,16 @@ export function AppNavigator() {
         <Stack.Screen
           name="Reflection"
           component={ReflectionScreen}
+          options={{ animation: 'slide_from_bottom', presentation: 'modal' }}
+        />
+        <Stack.Screen
+          name="CollectionDetail"
+          component={CollectionDetailScreen}
+          options={{ animation: 'slide_from_right' }}
+        />
+        <Stack.Screen
+          name="CreateCollection"
+          component={CreateCollectionScreen}
           options={{ animation: 'slide_from_bottom', presentation: 'modal' }}
         />
       </Stack.Navigator>

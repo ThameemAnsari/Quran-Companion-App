@@ -81,6 +81,31 @@ const EMOTION_MESSAGES: Record<Mood, { title: string; subtitle: string; body: st
     subtitle: 'A short ayah to lift your spirit.',
     body: 'Take one quiet moment — it\'s enough.',
   },
+  Grateful: {
+    title: 'A heart full of gratitude 🌸',
+    subtitle: 'Reflect on Allah\'s blessings today.',
+    body: 'Open the app and deepen your thankfulness.',
+  },
+  Lonely: {
+    title: 'You are never alone 🥺',
+    subtitle: 'Allah is closer than you think.',
+    body: 'A comforting ayah is waiting for you.',
+  },
+  Fearful: {
+    title: 'Find calm in His words 🤲',
+    subtitle: 'Let the Quran ease what weighs on you.',
+    body: 'Your peace is just one ayah away.',
+  },
+  'Seeking Forgiveness': {
+    title: 'His mercy is vast 💚',
+    subtitle: 'Turn back — He is always ready to forgive.',
+    body: 'A reminder of His forgiveness awaits you.',
+  },
+  'Seeking Peace': {
+    title: 'Stillness for your soul 😌',
+    subtitle: 'Let an ayah bring you tranquility.',
+    body: 'Take a breath — the Quran is here.',
+  },
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────

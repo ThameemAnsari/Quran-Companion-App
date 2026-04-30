@@ -8,8 +8,12 @@ import {
   TouchableOpacity,
   Switch,
   StatusBar,
+  Share,
+  Alert,
+  Image,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import * as Device from 'expo-device';
 import { useAppStore } from '../store/useAppStore';
 import {
   requestNotificationPermission,
@@ -18,12 +22,27 @@ import {
 } from '../services/notificationService';
 
 export const ProfileScreen: React.FC = () => {
-  const { streak, weekStats, bookmarks, reflections, notificationsEnabled, setNotificationsEnabled } = useAppStore();
+  const { streak, weekStats, bookmarks, reflections, notificationsEnabled, setNotificationsEnabled, dailyStats } = useAppStore();
+
+  const totalAyahsRead = Object.values(dailyStats).reduce((sum, d) => sum + (d.ayahsRead ?? 0), 0);
+  const totalDaysConnected = Object.values(dailyStats).filter(
+    (d) => (d.ayahsRead ?? 0) > 0 || (d.timeSpentMinutes ?? 0) > 0
+  ).length;
 
   async function handleToggleReminders(value: boolean) {
     if (value) {
       const granted = await requestNotificationPermission();
-      if (!granted) return;
+      if (!granted) {
+        if (Device.isDevice) {
+          Alert.alert(
+            'Permission Required',
+            'Please enable notifications for Quran Companion in your device Settings to receive daily reminders.',
+            [{ text: 'OK' }]
+          );
+          return;
+        }
+        // Simulator: fall through and enable anyway so UI is testable
+      }
       await scheduleDailyEvaluationTrigger(18, 0);
     } else {
       await cancelAllNotifications();
@@ -38,19 +57,26 @@ export const ProfileScreen: React.FC = () => {
     return `${h}h${m > 0 ? ` ${m}m` : ''}`;
   }
 
+  async function handleShare() {
+    await Share.share({
+      message:
+        '📖 I\'ve been using Quran Companion to reflect on ayahs that match my mood. It\'s a beautiful way to connect with the Quran daily. Try it out!',
+    });
+  }
+
   type MenuItem = {
     icon: string;
     label: string;
     sub: string;
     toggle?: boolean;
+    onPress?: () => void;
   };
 
   const menuItems: MenuItem[] = [
     { icon: 'notifications-outline', label: 'Daily Reminders', sub: notificationsEnabled ? 'Enabled' : 'Tap to enable', toggle: true },
     { icon: 'language-outline', label: 'Translation Language', sub: 'English (Sahih International)' },
     { icon: 'musical-notes-outline', label: 'Reciter', sub: 'Mishary Alafasy' },
-    { icon: 'moon-outline', label: 'Dark Mode', sub: 'Coming soon' },
-    { icon: 'share-outline', label: 'Share App', sub: 'Share with friends' },
+    { icon: 'share-outline', label: 'Share App', sub: 'Share with friends', onPress: handleShare },
     { icon: 'information-circle-outline', label: 'About', sub: 'Version 1.1.0' },
   ];
 
@@ -63,11 +89,26 @@ export const ProfileScreen: React.FC = () => {
       >
         {/* Avatar */}
         <View style={styles.avatarSection}>
-          <View style={styles.avatar}>
-            <Text style={styles.avatarEmoji}>🕌</Text>
-          </View>
+          <Image
+            source={require('../../assets/app_icon.png')}
+            style={styles.appIcon}
+            resizeMode="contain"
+          />
           <Text style={styles.name}>My Quran Journey</Text>
           <Text style={styles.tagline}>In the remembrance of Allah do hearts find rest.</Text>
+        </View>
+
+        {/* Total summary banner */}
+        <View style={styles.summaryBanner}>
+          <View style={styles.summaryItem}>
+            <Text style={styles.summaryValue}>{totalAyahsRead}</Text>
+            <Text style={styles.summaryLabel}>Total Ayahs Read</Text>
+          </View>
+          <View style={styles.summaryDivider} />
+          <View style={styles.summaryItem}>
+            <Text style={styles.summaryValue}>{totalDaysConnected}</Text>
+            <Text style={styles.summaryLabel}>Days with Quran</Text>
+          </View>
         </View>
 
         {/* Quick stats */}
@@ -89,29 +130,38 @@ export const ProfileScreen: React.FC = () => {
         <View style={styles.menu}>
           {menuItems.map((item, i) => (
             <React.Fragment key={item.label}>
-              <TouchableOpacity
-                style={styles.menuItem}
-                activeOpacity={item.toggle ? 1 : 0.7}
-                onPress={item.toggle ? undefined : undefined}
-              >
-                <View style={styles.menuIconWrap}>
-                  <Ionicons name={item.icon as any} size={20} color="#2E7D32" />
-                </View>
-                <View style={styles.menuInfo}>
-                  <Text style={styles.menuLabel}>{item.label}</Text>
-                  <Text style={styles.menuSub}>{item.sub}</Text>
-                </View>
-                {item.toggle ? (
+              {item.toggle ? (
+                <View style={styles.menuItem}>
+                  <View style={styles.menuIconWrap}>
+                    <Ionicons name={item.icon as any} size={20} color="#2E7D32" />
+                  </View>
+                  <View style={styles.menuInfo}>
+                    <Text style={styles.menuLabel}>{item.label}</Text>
+                    <Text style={styles.menuSub}>{item.sub}</Text>
+                  </View>
                   <Switch
                     value={notificationsEnabled}
                     onValueChange={handleToggleReminders}
                     trackColor={{ false: '#E5E7EB', true: '#A5D6A7' }}
                     thumbColor={notificationsEnabled ? '#2E7D32' : '#9CA3AF'}
                   />
-                ) : (
+                </View>
+              ) : (
+                <TouchableOpacity
+                  style={styles.menuItem}
+                  activeOpacity={0.7}
+                  onPress={item.onPress}
+                >
+                  <View style={styles.menuIconWrap}>
+                    <Ionicons name={item.icon as any} size={20} color="#2E7D32" />
+                  </View>
+                  <View style={styles.menuInfo}>
+                    <Text style={styles.menuLabel}>{item.label}</Text>
+                    <Text style={styles.menuSub}>{item.sub}</Text>
+                  </View>
                   <Ionicons name="chevron-forward" size={16} color="#D1D5DB" />
-                )}
-              </TouchableOpacity>
+                </TouchableOpacity>
+              )}
               {i < menuItems.length - 1 && <View style={styles.menuDivider} />}
             </React.Fragment>
           ))}
@@ -136,21 +186,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 24,
   },
-  avatar: {
-    width: 90,
-    height: 90,
-    borderRadius: 45,
-    backgroundColor: '#E8F5E9',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 12,
-    shadowColor: '#2E7D32',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 10,
-    elevation: 3,
+  appIcon: {
+    width: 120,
+    height: 120,
+    borderRadius: 28,
+    marginBottom: 14,
   },
-  avatarEmoji: { fontSize: 44 },
   name: {
     fontSize: 20,
     fontWeight: '700',
@@ -233,5 +274,38 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#9CA3AF',
     fontStyle: 'italic',
+  },
+  summaryBanner: {
+    flexDirection: 'row',
+    backgroundColor: '#2E7D32',
+    borderRadius: 20,
+    paddingVertical: 20,
+    marginBottom: 16,
+    shadowColor: '#2E7D32',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 10,
+    elevation: 4,
+  },
+  summaryItem: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  summaryValue: {
+    fontSize: 32,
+    fontWeight: '800',
+    color: '#fff',
+    letterSpacing: -0.5,
+  },
+  summaryLabel: {
+    fontSize: 12,
+    color: 'rgba(255,255,255,0.75)',
+    fontWeight: '600',
+    marginTop: 4,
+  },
+  summaryDivider: {
+    width: 1,
+    backgroundColor: 'rgba(255,255,255,0.25)',
+    marginVertical: 6,
   },
 });

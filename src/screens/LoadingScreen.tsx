@@ -7,6 +7,7 @@ import {
   StatusBar,
   Animated,
 } from 'react-native';
+import { Image } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
 import type { RootStackParamList } from '../types';
@@ -80,10 +81,11 @@ export const LoadingScreen: React.FC<Props> = ({ navigation, route }) => {
       >
         {/* Floating illustration */}
         <Animated.View style={[styles.illustration, { transform: [{ translateY: iconFloat }] }]}>
-          <View style={styles.illustrationBg}>
-            <Text style={styles.illustrationIcon}>📖</Text>
-          </View>
-          <View style={styles.glowRing} />
+          <Image
+            source={require('../../assets/app_icon.png')}
+            style={styles.appIcon}
+            resizeMode="contain"
+          />
         </Animated.View>
 
         {/* Title */}
@@ -150,24 +152,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 36,
-    position: 'relative',
   },
-  illustrationBg: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    backgroundColor: '#E8F5E9',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  illustrationIcon: { fontSize: 56 },
-  glowRing: {
-    position: 'absolute',
-    width: 140,
-    height: 140,
-    borderRadius: 70,
-    borderWidth: 2,
-    borderColor: 'rgba(46,125,50,0.15)',
+  appIcon: {
+    width: 160,
+    height: 160,
+    borderRadius: 36,
   },
   title: {
     fontSize: 28,

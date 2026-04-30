@@ -4,7 +4,7 @@
     "slug": "quran-companion",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/icon.png",
+    "icon": "./assets/app_icon.png",
     "userInterfaceStyle": "light",
     "splash": {
       "image": "./assets/splash.png",
@@ -15,24 +15,34 @@
       "supportsTablet": false,
       "bundleIdentifier": "com.qurancompanion.app",
       "infoPlist": {
-        "UIBackgroundModes": ["audio"]
+        "UIBackgroundModes": [
+          "audio"
+        ]
       }
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/adaptive-icon.png",
+        "foregroundImage": "./assets/app_icon.png",
         "backgroundColor": "#F5F7F2"
       },
       "package": "com.qurancompanion.app",
-      "permissions": ["android.permission.RECORD_AUDIO"]
+      "permissions": [
+        "android.permission.RECORD_AUDIO",
+        "android.permission.MODIFY_AUDIO_SETTINGS"
+      ]
     },
     "web": {
-      "favicon": "./assets/favicon.png"
+      "favicon": "./assets/app_icon.png"
     },
-    "plugins": ["expo-av"],
+    "plugins": [
+      "expo-av"
+    ],
     "extra": {
       "quranApiBase": "https://api.qurancdn.com/api/qdc/v4",
-      "audioBase": "https://verses.quran.com"
+      "audioBase": "https://verses.quran.com",
+      "eas": {
+        "projectId": "9cc0ed0c-d16b-4612-ac70-fdf55c363cbc"
+      }
     }
   }
 }

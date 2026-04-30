@@ -18,6 +18,7 @@ import type { RootStackParamList, MainTabParamList } from '../types';
 import { useAppStore } from '../store/useAppStore';
 import { AudioPlayer } from '../components/AudioPlayer';
 import { NotificationPermissionModal } from '../components/NotificationPermissionModal';
+import { AddToCollectionSheet } from '../components/AddToCollectionSheet';
 
 type Props = CompositeScreenProps<
   BottomTabScreenProps<MainTabParamList, 'ForYou'>,
@@ -30,8 +31,10 @@ export const AyahScreen: React.FC<Props> = ({ navigation }) => {
     useAppStore();
   const [showExplanation, setShowExplanation] = useState(true);
   const [showPermissionModal, setShowPermissionModal] = useState(false);
+  const [showCollectionSheet, setShowCollectionSheet] = useState(false);
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(20)).current;
+  const scrollRef = useRef<ScrollView>(null);
   const sessionStartRef = useRef<number>(Date.now());
   const permTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -116,6 +119,16 @@ export const AyahScreen: React.FC<Props> = ({ navigation }) => {
         onDismiss={() => setShowPermissionModal(false)}
       />
 
+      {/* Add to Collection bottom sheet */}
+      <AddToCollectionSheet
+        visible={showCollectionSheet}
+        ayah={currentAyah}
+        onClose={() => setShowCollectionSheet(false)}
+        onCreateNew={() =>
+          (navigation as any).navigate('CreateCollection', { ayahToAdd: currentAyah })
+        }
+      />
+
       {/* Header */}
       <View style={styles.header}>
         <Text style={styles.headerTitle}>For You</Text>
@@ -129,6 +142,7 @@ export const AyahScreen: React.FC<Props> = ({ navigation }) => {
       </View>
 
       <ScrollView
+        ref={scrollRef}
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
       >
@@ -217,29 +231,43 @@ export const AyahScreen: React.FC<Props> = ({ navigation }) => {
 
         {/* Action buttons */}
         <View style={styles.actions}>
-          <TouchableOpacity style={styles.actionBtn} onPress={toggleBookmark}>
-            <Ionicons
-              name={bookmarked ? 'bookmark' : 'bookmark-outline'}
-              size={20}
-              color={bookmarked ? '#2E7D32' : '#6B7280'}
-            />
-            <Text style={[styles.actionLabel, bookmarked && styles.actionLabelActive]}>
-              {bookmarked ? 'Saved' : 'Bookmark'}
-            </Text>
-          </TouchableOpacity>
+          {/* Row 1: Bookmark + Reflect */}
+          <View style={styles.actionsRow}>
+            <TouchableOpacity style={[styles.actionBtn, styles.actionBtnFlex]} onPress={toggleBookmark}>
+              <Ionicons
+                name={bookmarked ? 'bookmark' : 'bookmark-outline'}
+                size={20}
+                color={bookmarked ? '#2E7D32' : '#6B7280'}
+              />
+              <Text style={[styles.actionLabel, bookmarked && styles.actionLabelActive]}>
+                {bookmarked ? 'Saved' : 'Bookmark'}
+              </Text>
+            </TouchableOpacity>
 
-          <TouchableOpacity
-            style={styles.actionBtn}
-            onPress={() => (navigation as any).navigate('Reflection', { ayah: currentAyah })}
-          >
-            <Ionicons name="pencil-outline" size={20} color="#6B7280" />
-            <Text style={styles.actionLabel}>Reflect</Text>
-          </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.actionBtn, styles.actionBtnFlex]}
+              onPress={() => (navigation as any).navigate('Reflection', { ayah: currentAyah })}
+            >
+              <Ionicons name="pencil-outline" size={20} color="#6B7280" />
+              <Text style={styles.actionLabel}>Reflect</Text>
+            </TouchableOpacity>
+          </View>
 
-          <TouchableOpacity style={styles.nextBtn} onPress={nextAyah}>
-            <Text style={styles.nextBtnText}>Next Ayah</Text>
-            <Ionicons name="arrow-forward" size={18} color="#fff" />
-          </TouchableOpacity>
+          {/* Row 2: Save to Playlist + Next Ayah */}
+          <View style={styles.actionsRow}>
+            <TouchableOpacity
+              style={[styles.actionBtn, styles.actionBtnFlex]}
+              onPress={() => setShowCollectionSheet(true)}
+            >
+              <Ionicons name="albums-outline" size={20} color="#6B7280" />
+              <Text style={styles.actionLabel}>Add to Playlist</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={[styles.nextBtn, styles.actionBtnFlex]} onPress={() => { scrollRef.current?.scrollTo({ y: 0, animated: false }); nextAyah(); }}>
+              <Text style={styles.nextBtnText}>Next Ayah</Text>
+              <Ionicons name="arrow-forward" size={18} color="#fff" />
+            </TouchableOpacity>
+          </View>
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -410,21 +438,28 @@ const styles = StyleSheet.create({
     marginTop: 12,
   },
   actions: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: 'column',
     gap: 8,
     paddingVertical: 4,
+  },
+  actionsRow: {
+    flexDirection: 'row',
+    gap: 8,
   },
   actionBtn: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     gap: 5,
-    paddingHorizontal: 14,
+    paddingHorizontal: 10,
     paddingVertical: 10,
     backgroundColor: '#fff',
     borderRadius: 12,
     borderWidth: 1.5,
     borderColor: '#E5E7EB',
+  },
+  actionBtnFlex: {
+    flex: 1,
   },
   actionLabel: {
     fontSize: 13,
@@ -433,12 +468,11 @@ const styles = StyleSheet.create({
   },
   actionLabelActive: { color: '#2E7D32' },
   nextBtn: {
-    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-    paddingVertical: 10,
+    paddingVertical: 13,
     backgroundColor: '#2E7D32',
     borderRadius: 12,
   },
