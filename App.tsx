@@ -51,7 +51,8 @@ function NotificationBootstrap() {
       if (type) {
         setLastNotificationTime(Date.now());
         if (type === 'comeback') {
-          setComebackSentDate(new Date().toISOString().split('T')[0]);
+          const n = new Date();
+          setComebackSentDate(`${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,'0')}-${String(n.getDate()).padStart(2,'0')}`);
         }
       }
 
@@ -85,7 +86,8 @@ function NotificationBootstrap() {
         if (type) {
           setLastNotificationTime(Date.now());
           if (type === 'comeback') {
-            setComebackSentDate(new Date().toISOString().split('T')[0]);
+            const n = new Date();
+            setComebackSentDate(`${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,'0')}-${String(n.getDate()).padStart(2,'0')}`);
           }
         }
       }

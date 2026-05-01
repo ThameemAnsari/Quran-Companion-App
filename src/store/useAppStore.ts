@@ -73,7 +73,13 @@ interface AppState {
   setPermissionDeniedDate: (date: string | null) => void;
 }
 
-const todayStr = () => new Date().toISOString().split('T')[0];
+const todayStr = () => {
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = String(now.getMonth() + 1).padStart(2, '0');
+  const d = String(now.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+};
 
 export const useAppStore = create<AppState>()(
   persist(
@@ -258,7 +264,10 @@ export const useAppStore = create<AppState>()(
 
         const yesterday = new Date();
         yesterday.setDate(yesterday.getDate() - 1);
-        const yesterdayStr = yesterday.toISOString().split('T')[0];
+        const y = yesterday.getFullYear();
+        const mo = String(yesterday.getMonth() + 1).padStart(2, '0');
+        const dy = String(yesterday.getDate()).padStart(2, '0');
+        const yesterdayStr = `${y}-${mo}-${dy}`;
 
         const newStreak =
           lastActiveDate === yesterdayStr ? streak + 1 : 1;
