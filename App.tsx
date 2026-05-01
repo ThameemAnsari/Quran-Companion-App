@@ -54,6 +54,12 @@ function NotificationBootstrap() {
           setComebackSentDate(new Date().toISOString().split('T')[0]);
         }
       }
+
+      // Always re-schedule the 8:30 PM daily reminder after evaluation.
+      // This ensures the notification fires even if the user force-kills the app
+      // (swipe away from recents), because force-kill skips the AppState
+      // background event entirely — so we can't rely on that alone.
+      await scheduleSmartDailyReminder(ctx, 20, 30);
     })();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
