@@ -18,7 +18,7 @@ import { useAppStore } from '../store/useAppStore';
 import {
   requestNotificationPermission,
   cancelAllNotifications,
-  scheduleDailyEvaluationTrigger,
+  scheduleSmartDailyReminder,
 } from '../services/notificationService';
 
 export const ProfileScreen: React.FC = () => {
@@ -43,7 +43,12 @@ export const ProfileScreen: React.FC = () => {
         }
         // Simulator: fall through and enable anyway so UI is testable
       }
-      await scheduleDailyEvaluationTrigger(18, 0);
+      // Schedule with generic context; App.tsx personalises on next background
+      await scheduleSmartDailyReminder(
+        { lastActiveDate: null, streak: 0, selectedMood: null,
+          lastNotificationTime: null, comebackSentDate: null, notificationsEnabled: true },
+        20, 30
+      );
     } else {
       await cancelAllNotifications();
     }

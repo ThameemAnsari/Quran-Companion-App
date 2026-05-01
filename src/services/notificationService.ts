@@ -4,8 +4,10 @@
  * Principles:
  * - Max 1 notification per day
  * - Never notify if user opened app today
- * - Quiet hours: 10:30 PM – 6:30 AM (no scheduling during this window)
+ * - Quiet hours: 10:00 PM – 5:30 AM (no scheduling during this window)
+ * - Daily evaluation fires at 8:30 PM — inside the night window, before quiet hours
  * - Priority: Comeback > Streak > Emotion > Night reminder
+ * - Streak warning: only on inactiveDays === 1 (today still saveable); resets if missed
  * - Comeback: send once, then pause 2 days
  */
 
@@ -51,7 +53,6 @@ const NIGHT_REMIND_END_HOUR   = 22; // 10:00 PM
 const NIGHT_REMIND_END_MIN    = 0;
 
 const MS_24H = 24 * 60 * 60 * 1000;
-const MS_48H = 48 * 60 * 60 * 1000;
 
 // ─── Emotion messages ─────────────────────────────────────────────────────────
 
@@ -157,7 +158,7 @@ export async function requestNotificationPermission(): Promise<boolean> {
   if (Platform.OS === 'android') {
     await Notifications.setNotificationChannelAsync('quran-companion', {
       name: 'Quran Companion',
-      importance: Notifications.AndroidImportance.DEFAULT,
+      importance: Notifications.AndroidImportance.HIGH, // HIGH = heads-up banner visible
       sound: null,
     });
   }
@@ -254,13 +255,16 @@ export async function evaluateAndSendNotification(
     }
   }
 
-  // ── Priority 2: Streak at risk (active streak, missed today) ──
-  if (streak > 0 && inactiveDays >= 1) {
+  // ── Priority 2: Streak at risk (missed TODAY only — still salvageable) ──
+  // inactiveDays === 1 means the user last opened yesterday. Today is the
+  // last chance to preserve the streak before it resets at midnight.
+  // If inactiveDays >= 2 the streak is already broken — comeback handles that.
+  if (streak > 0 && inactiveDays === 1) {
     await sendLocalNotification({
       type: 'streak',
-      title: "🔥 Don't break your streak!",
-      subtitle: `You've built a ${streak}-day streak. Keep your journey alive.`,
-      body: 'Read one ayah today to keep it going.',
+      title: "You have been consistent with the Quran 🤍",
+      subtitle: `You've built a 🔥 ${streak} day streak — Connect with the Quran today to maintain your streak!`,
+      body: 'Open the app and read one ayah before midnight.',
     });
     return 'streak';
   }
@@ -291,38 +295,69 @@ export async function evaluateAndSendNotification(
   return null;
 }
 
-// ─── Schedule recurring daily check ──────────────────────────────────────────
+// ─── Schedule smart daily reminder ───────────────────────────────────────────
 
 /**
- * Schedules a silent background trigger at a given hour:minute each day.
- * On trigger the app should call evaluateAndSendNotification().
+ * Schedules a REAL visible notification at the given hour:minute each day.
+ * Content is personalised based on current user state (streak, mood, etc.).
  *
- * Note: Expo's local trigger fires even when app is in background.
+ * Call this when the app goes to background so the notification fires even
+ * when the app is fully closed. Cancel it on foreground (user is already active).
+ *
+ * This replaces the previous silent isEvalTrigger approach which had two bugs:
+ *   1. The silent notification showed a blank banner on Android
+ *   2. Nobody called evaluateAndSendNotification() when the trigger fired
  */
-export async function scheduleDailyEvaluationTrigger(
-  hour: number = 18,
-  minute: number = 0
+export async function scheduleSmartDailyReminder(
+  ctx: NotificationContext,
+  hour: number = 20,   // 8:30 PM — before quiet hours at 10 PM
+  minute: number = 30
 ): Promise<void> {
-  // Cancel previous evaluation triggers only (identified by identifier)
-  const scheduled = await Notifications.getAllScheduledNotificationsAsync();
-  for (const n of scheduled) {
-    if ((n.content.data as Record<string, unknown>)?.isEvalTrigger) {
-      await Notifications.cancelScheduledNotificationAsync(n.identifier);
-    }
+  await Notifications.cancelAllScheduledNotificationsAsync();
+
+  if (!ctx.notificationsEnabled) return;
+
+  // Pick personalised content based on user state
+  const today = todayStr();
+  const inactiveDays = ctx.lastActiveDate ? daysBetween(today, ctx.lastActiveDate) : 1;
+
+  let title: string;
+  let subtitle: string;
+  let body: string;
+  let type: NotificationType;
+
+  // Streak warning: only fire on inactiveDays === 1 — the single day the streak
+  // is still saveable. If inactiveDays >= 2 the streak is already broken; use
+  // emotion/night messaging instead. The store resets streak to 1 on next open.
+  if (ctx.streak > 0 && inactiveDays === 1) {
+    type = 'streak';
+    title = "🔥 Don't break your streak!";
+    subtitle = `You've built a ${ctx.streak}-day streak — Keep it alive by connecting with the Quran today!`;
+    body = 'Open the app and read one ayah before midnight to maintain your streak.';
+  } else if (ctx.selectedMood && EMOTION_MESSAGES[ctx.selectedMood]) {
+    type = 'emotion';
+    ({ title, subtitle, body } = EMOTION_MESSAGES[ctx.selectedMood]);
+  } else {
+    type = 'night';
+    title = 'Your daily Quran reminder 🌙';
+    subtitle = 'A moment with the Quran can change your whole evening.';
+    body = 'Read a short ayah before you sleep.';
   }
 
   await Notifications.scheduleNotificationAsync({
     content: {
-      title: '',
-      body: '',
-      data: { isEvalTrigger: true },
-      // hidden trigger — handler checks isEvalTrigger and suppresses display
+      title,
+      subtitle,
+      body: Platform.OS === 'android' ? `${subtitle}\n${body}` : body,
+      data: { type, screen: 'Home' },
+      sound: false,
     },
     trigger: {
+      channelId: Platform.OS === 'android' ? 'quran-companion' : undefined,
       hour,
       minute,
       repeats: true,
-    },
+    } as Notifications.DailyTriggerInput,
   });
 }
 

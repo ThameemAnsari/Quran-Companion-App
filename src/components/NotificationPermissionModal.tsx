@@ -12,7 +12,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useAppStore } from '../store/useAppStore';
 import {
   requestNotificationPermission,
-  scheduleDailyEvaluationTrigger,
+  scheduleSmartDailyReminder,
 } from '../services/notificationService';
 
 interface Props {
@@ -41,7 +41,13 @@ export const NotificationPermissionModal: React.FC<Props> = ({ visible, onDismis
     const granted = await requestNotificationPermission();
 
     if (granted) {
-      await scheduleDailyEvaluationTrigger(18, 0);
+      // Schedule a generic 8:30 PM reminder; App.tsx will personalise it
+      // with streak/mood content the next time the app goes to background.
+      await scheduleSmartDailyReminder(
+        { lastActiveDate: null, streak: 0, selectedMood: null,
+          lastNotificationTime: null, comebackSentDate: null, notificationsEnabled: true },
+        20, 30
+      );
       setNotificationsEnabled(true);
     } else {
       // System denied — record date for soft follow-up message

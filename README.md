@@ -61,9 +61,17 @@ A beautifully designed React Native (Expo) app that helps users build a consiste
 - Tappable stats cards open modal popups with full collapsible lists of bookmarks and reflections
 
 ### 🔔 Notifications
-- Daily reminder notifications to keep your streak alive
+- **Smart daily reminder** scheduled at 8:30 PM every day — fires even when the app is fully closed
+- **Priority-based engine** — at most 1 notification per day, chosen in this order:
+  1. **Comeback** — inactive 2–3 days, sent once then paused for 2 days
+  2. **Streak warning** — fires only on `inactiveDays === 1` (last chance to save the streak before midnight)
+  3. **Emotion-based** — personalised message based on last selected mood
+  4. **Night reminder** — fallback within the 8:30–10:00 PM window
+- **Quiet hours** respected: no notifications between 10:00 PM and 5:30 AM
+- **Android HIGH importance** channel (`quran-companion`) — ensures heads-up banners appear on lock screen
+- **App lifecycle aware**: scheduled reminder is cancelled when app is opened (user is active), re-scheduled when app goes to background
 - Permission request modal with graceful fallback
-- Configurable via Profile settings
+- Configurable via Profile settings (toggle Daily Reminders on/off)
 
 ### 👤 Profile
 - App icon displayed as avatar
@@ -166,7 +174,7 @@ src/
 │   └── ProfileScreen.tsx          # User profile & settings
 ├── services/
 │   ├── aiService.ts               # AI explanation generation
-│   ├── notificationService.ts     # Notification scheduling
+│   ├── notificationService.ts     # Smart notification engine (priority-based, lifecycle-aware)
 │   └── quranApi.ts                # Quran.com API + audio URL builder
 ├── store/
 │   └── useAppStore.ts             # Zustand global store

@@ -8,7 +8,7 @@ import { AppNavigator } from './src/navigation/AppNavigator';
 import { useAppStore } from './src/store/useAppStore';
 import {
   evaluateAndSendNotification,
-  scheduleDailyEvaluationTrigger,
+  scheduleSmartDailyReminder,
 } from './src/services/notificationService';
 
 function NotificationBootstrap() {
@@ -25,25 +25,29 @@ function NotificationBootstrap() {
 
   const appState = useRef<AppStateStatus>(AppState.currentState);
 
+  // Build the context object used by both evaluate and schedule functions
+  const ctx = {
+    lastActiveDate,
+    streak,
+    selectedMood,
+    lastNotificationTime,
+    comebackSentDate,
+    notificationsEnabled,
+  };
+
   // ── Bootstrap on mount ────────────────────────────────────────────────────
+  // When the app opens:
+  //   1. Cancel any pending scheduled notification (user is now active)
+  //   2. Evaluate and send an immediate notification if conditions met
+  //      (e.g. app opened at 9 PM after being inactive all day)
   useEffect(() => {
     (async () => {
-      // Only evaluate/schedule if user has already granted permission via the
-      // pre-permission screen (notificationsEnabled = true in store).
       if (!notificationsEnabled) return;
 
-      // Ensure daily trigger is registered after every fresh app install
-      await scheduleDailyEvaluationTrigger(18, 0);
+      // Cancel the scheduled 8:30 PM reminder — user just opened the app
+      await Notifications.cancelAllScheduledNotificationsAsync();
 
-      const type = await evaluateAndSendNotification({
-        lastActiveDate,
-        streak,
-        selectedMood,
-        lastNotificationTime,
-        comebackSentDate,
-        notificationsEnabled,
-      });
-
+      const type = await evaluateAndSendNotification(ctx);
       if (type) {
         setLastNotificationTime(Date.now());
         if (type === 'comeback') {
@@ -53,22 +57,25 @@ function NotificationBootstrap() {
     })();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── Re-evaluate when app comes to foreground from background ─────────────
+  // ── AppState transitions ──────────────────────────────────────────────────
   useEffect(() => {
     const sub = AppState.addEventListener('change', async (nextState) => {
-      if (
-        appState.current.match(/inactive|background/) &&
-        nextState === 'active'
-      ) {
-        const type = await evaluateAndSendNotification({
-          lastActiveDate,
-          streak,
-          selectedMood,
-          lastNotificationTime,
-          comebackSentDate,
-          notificationsEnabled,
-        });
+      const wasActive = appState.current === 'active';
+      const goingToBackground = nextState.match(/inactive|background/);
+      const comingToForeground =
+        appState.current.match(/inactive|background/) && nextState === 'active';
 
+      if (wasActive && goingToBackground) {
+        // App going to background → schedule the 8:30 PM real notification
+        // so it fires even when the app is fully closed
+        await scheduleSmartDailyReminder(ctx, 20, 30);
+      }
+
+      if (comingToForeground) {
+        // App coming to foreground → user is now active, cancel scheduled reminder
+        await Notifications.cancelAllScheduledNotificationsAsync();
+
+        const type = await evaluateAndSendNotification(ctx);
         if (type) {
           setLastNotificationTime(Date.now());
           if (type === 'comeback') {
@@ -76,6 +83,7 @@ function NotificationBootstrap() {
           }
         }
       }
+
       appState.current = nextState;
     });
 
