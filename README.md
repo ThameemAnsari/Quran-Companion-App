@@ -216,8 +216,11 @@ eas.json                           # EAS Build profiles (preview APK / productio
 | [api.quran.com/api/v4](https://api.quran.com/api/v4/) | None | Verse text, translations, word-by-word data |
 | [cdn.islamic.network](https://cdn.islamic.network/quran/audio/128/ar.alafasy) | None | Full verse audio (Mishary Alafasy) |
 | [audio.qurancdn.com](https://audio.qurancdn.com) | None | Word-by-word pronunciation audio |
-| [apis.quran.foundation](https://apis.quran.foundation/content/api/v4) | OAuth2 `content` | Tafsir (Ibn Kathir + language-native) |
-| [apis.quran.foundation/search](https://apis.quran.foundation/search/v1) | OAuth2 `search` | Mood-based ayah search |
+| [apis.quran.foundation/content](https://apis.quran.foundation/content/api/v4) | OAuth2 (client credentials, `content` scope) | Tafsir (Ibn Kathir + language-native) |
+| [apis.quran.foundation/search](https://apis.quran.foundation/search/v1) | OAuth2 (client credentials, `search` scope) | Mood-based ayah search |
+
+> **OAuth2 credentials** are stored in `app.json` under `expo.extra` (`quranClientId`, `quranClientSecret`).  
+> Tokens are fetched automatically using the **client credentials flow**, cached in memory, and proactively renewed 60 seconds before expiry — no manual token management needed.
 
 ---
 
