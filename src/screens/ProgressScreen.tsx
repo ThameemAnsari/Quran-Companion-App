@@ -2,7 +2,6 @@ import React, { useMemo, useState } from 'react';
 import {
   FlatList,
   Modal,
-  SafeAreaView,
   ScrollView,
   StatusBar,
   StyleSheet,
@@ -10,6 +9,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppStore } from '../store/useAppStore';
 import { AudioPlayer } from '../components/AudioPlayer';
@@ -258,7 +258,7 @@ export const ProgressScreen: React.FC = () => {
     expandedStat === 'bookmarks' ? 'Bookmarks' : 'Time Spent';
 
   return (
-    <SafeAreaView style={styles.safe}>
+    <SafeAreaView style={styles.safe} edges={['top']}>
       <StatusBar barStyle="dark-content" backgroundColor="#F5F7F2" />
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <Text style={styles.pageTitle}>Your Progress</Text>

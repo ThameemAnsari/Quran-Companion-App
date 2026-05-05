@@ -1,9 +1,8 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
   StyleSheet,
-  SafeAreaView,
   ScrollView,
   TouchableOpacity,
   Switch,
@@ -12,19 +11,25 @@ import {
   Alert,
   Image,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
 import { useAppStore } from '../store/useAppStore';
 import {
   requestNotificationPermission,
   cancelAllNotifications,
   scheduleSmartDailyReminder,
+  scheduleTestNotification,
 } from '../services/notificationService';
 
 export const ProfileScreen: React.FC = () => {
-  const { streak, weekStats, bookmarks, reflections, notificationsEnabled, setNotificationsEnabled, dailyStats } = useAppStore();
+  const { streak, weekStats, bookmarks, reflections, notificationsEnabled, setNotificationsEnabled, dailyStats, selectedTranslationName } = useAppStore();
 
-  const totalAyahsRead = Object.values(dailyStats).reduce((sum, d) => sum + (d.ayahsRead ?? 0), 0);
+  const totalAyahsRead = Math.max(
+    weekStats.ayahsRead,
+    Object.values(dailyStats).reduce((sum, d) => sum + (d.ayahsRead ?? 0), 0)
+  );
   const totalDaysConnected = Object.values(dailyStats).filter(
     (d) => (d.ayahsRead ?? 0) > 0 || (d.timeSpentMinutes ?? 0) > 0
   ).length;
@@ -63,6 +68,8 @@ export const ProfileScreen: React.FC = () => {
   }
 
   async function handleShare() {
+    const scheduled = await Notifications.getAllScheduledNotificationsAsync();
+    console.log('[notif] Scheduled notifications:', JSON.stringify(scheduled, null, 2));
     await Share.share({
       message:
         '📖 I\'ve been using Quran Companion to reflect on ayahs that match my mood. It\'s a beautiful way to connect with the Quran daily. Try it out!',
@@ -79,15 +86,16 @@ export const ProfileScreen: React.FC = () => {
 
   const menuItems: MenuItem[] = [
     { icon: 'notifications-outline', label: 'Daily Reminders', sub: notificationsEnabled ? 'Enabled' : 'Tap to enable', toggle: true },
-    { icon: 'language-outline', label: 'Translation Language', sub: 'English (Sahih International)' },
+    { icon: 'language-outline', label: 'Translation Language', sub: selectedTranslationName },
     { icon: 'musical-notes-outline', label: 'Reciter', sub: 'Mishary Alafasy' },
     { icon: 'share-outline', label: 'Share App', sub: 'Share with friends', onPress: handleShare },
     { icon: 'information-circle-outline', label: 'About', sub: 'Version 1.1.0' },
   ];
 
   return (
-    <SafeAreaView style={styles.safe}>
+    <SafeAreaView style={styles.safe} edges={['top']}>
       <StatusBar barStyle="dark-content" backgroundColor="#F5F7F2" />
+
       <ScrollView
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
@@ -164,13 +172,39 @@ export const ProfileScreen: React.FC = () => {
                     <Text style={styles.menuLabel}>{item.label}</Text>
                     <Text style={styles.menuSub}>{item.sub}</Text>
                   </View>
-                  <Ionicons name="chevron-forward" size={16} color="#D1D5DB" />
                 </TouchableOpacity>
               )}
               {i < menuItems.length - 1 && <View style={styles.menuDivider} />}
             </React.Fragment>
           ))}
         </View>
+
+        {/* TEMP: Notification debug button */}
+        {/* <TouchableOpacity
+          style={styles.testNotifBtn}
+          activeOpacity={0.8}
+          onPress={async () => {
+            // Log raw OS status before going through the service
+            const { status: rawStatus } = await Notifications.getPermissionsAsync();
+            console.log('[test] raw OS permission:', rawStatus, '| isDevice:', Device.isDevice);
+
+            const granted = await requestNotificationPermission();
+            if (!granted) {
+              Alert.alert(
+                'Permission denied',
+                `OS status: "${rawStatus}" | isDevice: ${Device.isDevice}\n\nIf status is "granted", go to Settings → Apps → Quran Companion → Notifications and ensure it is enabled.`
+              );
+              return;
+            }
+            await scheduleTestNotification();
+            const scheduled = await Notifications.getAllScheduledNotificationsAsync();
+            console.log('[notif] After test schedule:', JSON.stringify(scheduled, null, 2));
+            Alert.alert('Scheduled!', `Notification in 10s.\nScheduled count: ${scheduled.length}\n\nYou can keep the app open — it will appear as a banner.`);
+          }}
+        >
+          <Ionicons name="notifications" size={16} color="#fff" style={{ marginRight: 6 }} />
+          <Text style={styles.testNotifText}>Test Notification (debug)</Text>
+        </TouchableOpacity> */}
 
         <Text style={styles.footer}>
           May Allah bless your journey with the Quran. 🌿
@@ -279,6 +313,20 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#9CA3AF',
     fontStyle: 'italic',
+  },
+  testNotifBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#F59E0B',
+    borderRadius: 12,
+    paddingVertical: 12,
+    marginBottom: 16,
+  },
+  testNotifText: {
+    color: '#fff',
+    fontWeight: '600',
+    fontSize: 14,
   },
   summaryBanner: {
     flexDirection: 'row',

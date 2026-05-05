@@ -1,10 +1,54 @@
 import axios from 'axios';
+import Constants from 'expo-constants';
 import type { Ayah, Verse, Chapter } from '../types';
 
 // ─── Base config ──────────────────────────────────────────────────────────────
 const BASE = 'https://api.quran.com/api/v4/';
-const TRANSLATION_ID = 20;         // Sahih International (stable public ID)
+const DEFAULT_TRANSLATION_ID = 85;  // M.A.S. Abdel Haleem — English (verified ID)
 const AUDIO_CDN = 'https://cdn.islamic.network/quran/audio/128/ar.alafasy';
+
+// ─── Quran Foundation Search API ─────────────────────────────────────────────
+// The @quranjs/api SDK hardcodes scope=content in its token request, but the
+// Search API requires scope=search. We fetch the token manually here.
+const QF_AUTH_URL    = 'https://oauth2.quran.foundation/oauth2/token';
+const QF_SEARCH_URL  = 'https://apis.quran.foundation/search/v1/search';
+const QF_CONTENT_URL = 'https://apis.quran.foundation/content/api/v4';
+
+// ─── Token caches (separate per scope) ───────────────────────────────────────
+let _searchTokenCache:  { value: string; expiresAt: number } | null = null;
+let _contentTokenCache: { value: string; expiresAt: number } | null = null;
+
+async function getToken(scope: 'search' | 'content'): Promise<string> {
+  const cache = scope === 'search' ? _searchTokenCache : _contentTokenCache;
+  if (cache && Date.now() < cache.expiresAt - 60_000) return cache.value;
+
+  const clientId     = Constants.expoConfig?.extra?.quranClientId as string;
+  const clientSecret = Constants.expoConfig?.extra?.quranClientSecret as string;
+  const credentials  = btoa(`${clientId}:${clientSecret}`);
+
+  const res = await axios.post(
+    QF_AUTH_URL,
+    `grant_type=client_credentials&scope=${scope}`,
+    {
+      headers: {
+        Authorization: `Basic ${credentials}`,
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      timeout: 10_000,
+    }
+  );
+
+  const entry = {
+    value: res.data.access_token,
+    expiresAt: Date.now() + (res.data.expires_in as number) * 1000,
+  };
+  if (scope === 'search') _searchTokenCache = entry;
+  else _contentTokenCache = entry;
+  return entry.value;
+}
+
+const getSearchToken  = () => getToken('search');
+const getContentToken = () => getToken('content');
 
 const api = axios.create({
   baseURL: BASE,
@@ -61,6 +105,169 @@ const toAyah = (verse: Verse, chapterName: string, theme?: string): Ayah => ({
   theme,
 });
 
+// ─── Language / Translation resources ────────────────────────────────────────
+
+/**
+ * A single entry shown in the language picker — one language, best translation.
+ */
+export interface LanguageOption {
+  id: number;           // quran.com translation resource ID
+  language: string;     // clean display name e.g. "English", "Tamil"
+}
+
+/**
+ * Best (most authoritative) translation ID per language_name as returned by
+ * GET /api/v4/resources/translations.  All IDs verified against the live API.
+ */
+const LANGUAGE_TRANSLATION_MAP: Record<string, { display: string; id: number }> = {
+  english:          { display: 'English',            id: 85  }, // M.A.S. Abdel Haleem
+  arabic:           { display: 'Arabic',             id: 16  }, // King Fahad Complex
+  urdu:             { display: 'Urdu',               id: 97  }, // Tafheem - Maududi
+  french:           { display: 'French',             id: 136 }, // Montada Islamic Foundation
+  persian:          { display: 'Persian (Farsi)',    id: 135 }, // IslamHouse.com
+  turkish:          { display: 'Turkish',            id: 77  }, // Diyanet Isleri
+  german:           { display: 'German',             id: 27  }, // Frank Bubenheim & Nadeem
+  spanish:          { display: 'Spanish',            id: 83  }, // Sheikh Isa Garcia
+  indonesian:       { display: 'Indonesian',         id: 134 }, // King Fahad Quran Complex
+  malay:            { display: 'Malay',              id: 39  }, // Abdullah Muhammad Basmeih
+  russian:          { display: 'Russian',            id: 45  }, // Elmir Kuliev
+  bengali:          { display: 'Bengali',            id: 161 }, // Taisirul Quran
+  tamil:            { display: 'Tamil',              id: 229 }, // Sheikh Omar Sharif
+  hindi:            { display: 'Hindi',              id: 122 }, // Maulana Azizul Haque al-Umari
+  chinese:          { display: 'Chinese',            id: 56  }, // Ma Jian (Simplified)
+  malayalam:        { display: 'Malayalam',          id: 37  }, // Abdul Hameed & Kunhi
+  italian:          { display: 'Italian',            id: 153 }, // Hamza Roberto Piccardo
+  dutch:            { display: 'Dutch',              id: 235 }, // Malak Faris Abdalsalaam
+  portuguese:       { display: 'Portuguese',         id: 103 }, // Helmi Nasr
+  japanese:         { display: 'Japanese',           id: 35  }, // Ryoichi Mita
+  korean:           { display: 'Korean',             id: 36  },
+  tagalog:          { display: 'Filipino (Tagalog)', id: 211 }, // Dar Al-Salam Center
+  swahili:          { display: 'Swahili',            id: 49  }, // Ali Muhsin Al-Barwani
+  hausa:            { display: 'Hausa',              id: 32  }, // Abubakar Gumi
+  bosnian:          { display: 'Bosnian',            id: 25  }, // Muhamed Mehanović
+  albanian:         { display: 'Albanian',           id: 88  }, // Hasan Efendi Nahi
+  swedish:          { display: 'Swedish',            id: 48  }, // Knut Bernström
+  polish:           { display: 'Polish',             id: 42  }, // Józef Bielawski
+  thai:             { display: 'Thai',               id: 51  }, // King Fahad Quran Complex
+  uzbek:            { display: 'Uzbek',              id: 55  }, // Muhammad Sodiq Yusuf
+  kazakh:           { display: 'Kazakh',             id: 113 }, // Khalifah Altai
+  vietnamese:       { display: 'Vietnamese',         id: 220 }, // Translation Pioneers Center
+  ukrainian:        { display: 'Ukrainian',          id: 217 }, // Dr. Mikhailo Yaqubovic
+  pashto:           { display: 'Pashto',             id: 118 }, // Zakaria Abulsalam
+  telugu:           { display: 'Telugu',             id: 227 }, // Maulana Abder-Rahim
+  gujarati:         { display: 'Gujarati',           id: 225 }, // Rabila Al-Umry
+  marathi:          { display: 'Marathi',            id: 226 }, // Muhammad Shafi'i Ansari
+  kannada:          { display: 'Kannada',            id: 771 },
+  sindhi:           { display: 'Sindhi',             id: 238 }, // Taj Mehmood Amroti
+  nepali:           { display: 'Nepali',             id: 108 }, // Ahl Al-Hadith Central Society
+  somali:           { display: 'Somali',             id: 46  }, // Mahmud Muhammad Abduh
+  yoruba:           { display: 'Yoruba',             id: 125 }, // Shaykh Abu Rahimah
+  amharic:          { display: 'Amharic',            id: 87  }, // Sadiq and Sani
+  azeri:            { display: 'Azerbaijani',        id: 75  }, // Alikhan Musayev
+  romanian:         { display: 'Romanian',           id: 44  }, // George Grigore
+  czech:            { display: 'Czech',              id: 26  },
+  norwegian:        { display: 'Norwegian',          id: 41  },
+  finnish:          { display: 'Finnish',            id: 30  },
+  bulgarian:        { display: 'Bulgarian',          id: 237 }, // Tzvetan Theophanov
+  hebrew:           { display: 'Hebrew',             id: 233 }, // Dar Al-Salam Center
+  assamese:         { display: 'Assamese',           id: 120 }, // Shaykh Rafeequl Islam
+  tajik:            { display: 'Tajik',              id: 74  },
+  tatar:            { display: 'Tatar',              id: 53  },
+  kurdish:          { display: 'Kurdish',            id: 81  }, // Burhan Muhammad-Amin
+  dari:             { display: 'Dari',               id: 785 }, // Mawlawi Muhammad Anwar Badkhashani
+  sinhala:          { display: 'Sinhala',            id: 228 }, // Translation Pioneers Center
+  chechen:          { display: 'Chechen',            id: 106 }, // Magomed Magomedov
+  kinyarwanda:      { display: 'Kinyarwanda',        id: 774 }, // Rwanda Muslims Association
+  bambara:          { display: 'Bambara',            id: 795 }, // Suliman Kanti
+  ganda:            { display: 'Luganda',            id: 232 }, // African Development Foundation
+};
+
+let _languagesCache: LanguageOption[] | null = null;
+
+/**
+ * Returns one LanguageOption per language supported by the Quran.com API,
+ * using verified preferred translation IDs. Results are cached per session.
+ * Falls back to a static list if the network is unavailable.
+ */
+export async function fetchLanguages(): Promise<LanguageOption[]> {
+  if (_languagesCache) return _languagesCache;
+
+  try {
+    const res = await api.get('resources/translations', { params: { language: 'en' } });
+    const raw: Array<{ id: number; language_name: string }> = res.data?.translations ?? [];
+
+    const seen = new Set<string>();
+    const result: LanguageOption[] = [];
+
+    for (const t of raw) {
+      // API language_name may be "divehi, dhivehi, maldivian" — normalise to first word
+      const key = t.language_name.toLowerCase().split(',')[0].trim();
+      if (seen.has(key)) continue;
+      seen.add(key);
+
+      const mapping = LANGUAGE_TRANSLATION_MAP[key];
+      if (mapping) {
+        result.push({ id: mapping.id, language: mapping.display });
+      }
+      // Skip languages not in our map (very obscure/unverified IDs)
+    }
+
+    // Sort alphabetically, English always first
+    result.sort((a, b) => {
+      if (a.language === 'English') return -1;
+      if (b.language === 'English') return 1;
+      return a.language.localeCompare(b.language);
+    });
+
+    _languagesCache = result;
+    return result;
+  } catch (err) {
+    console.warn('[quranApi] fetchLanguages error — using static fallback:', err);
+    // Static fallback with the most common languages
+    _languagesCache = [
+      { id: 85,  language: 'English' },
+      { id: 87,  language: 'Amharic' },
+      { id: 75,  language: 'Azerbaijani' },
+      { id: 161, language: 'Bengali' },
+      { id: 25,  language: 'Bosnian' },
+      { id: 56,  language: 'Chinese' },
+      { id: 27,  language: 'German' },
+      { id: 225, language: 'Gujarati' },
+      { id: 32,  language: 'Hausa' },
+      { id: 122, language: 'Hindi' },
+      { id: 134, language: 'Indonesian' },
+      { id: 35,  language: 'Japanese' },
+      { id: 113, language: 'Kazakh' },
+      { id: 771, language: 'Kannada' },
+      { id: 36,  language: 'Korean' },
+      { id: 39,  language: 'Malay' },
+      { id: 37,  language: 'Malayalam' },
+      { id: 226, language: 'Marathi' },
+      { id: 108, language: 'Nepali' },
+      { id: 118, language: 'Pashto' },
+      { id: 135, language: 'Persian (Farsi)' },
+      { id: 211, language: 'Filipino (Tagalog)' },
+      { id: 42,  language: 'Polish' },
+      { id: 103, language: 'Portuguese' },
+      { id: 45,  language: 'Russian' },
+      { id: 238, language: 'Sindhi' },
+      { id: 46,  language: 'Somali' },
+      { id: 83,  language: 'Spanish' },
+      { id: 49,  language: 'Swahili' },
+      { id: 229, language: 'Tamil' },
+      { id: 227, language: 'Telugu' },
+      { id: 51,  language: 'Thai' },
+      { id: 77,  language: 'Turkish' },
+      { id: 217, language: 'Ukrainian' },
+      { id: 97,  language: 'Urdu' },
+      { id: 55,  language: 'Uzbek' },
+      { id: 220, language: 'Vietnamese' },
+      { id: 125, language: 'Yoruba' },
+    ];
+    return _languagesCache;
+  }
+}
+
 // ─── Cache ────────────────────────────────────────────────────────────────────
 
 const chapterCache: Map<number, Chapter> = new Map();
@@ -75,67 +282,132 @@ export async function fetchChapter(id: number): Promise<Chapter> {
 
 // ─── Public API ───────────────────────────────────────────────────────────────
 
+/**
+ * Lightweight probe: fetches page=1, size=1 just to read pagination.total_pages.
+ * Used before building the shuffle deck so the cap is always accurate.
+ */
+export async function probeTotalPages(query: string): Promise<number> {
+  try {
+    const clientId = Constants.expoConfig?.extra?.quranClientId as string;
+    const token    = await getSearchToken();
+    const res = await axios.get(QF_SEARCH_URL, {
+      params: { mode: 'advanced', query, page: 1, size: 10, get_text: '0' },
+      headers: {
+        'x-auth-token': token,
+        'x-client-id': clientId,
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      timeout: 8_000,
+    });
+    return res.data?.pagination?.total_pages ?? 20;
+  } catch {
+    return 20; // safe fallback
+  }
+}
+
 export async function searchAyahs(
   query: string,
   theme?: string,
   size = 10,
-  page = 1
-): Promise<Ayah[]> {
+  page = 1,
+  translationId: number = DEFAULT_TRANSLATION_ID
+): Promise<{ ayahs: Ayah[]; totalPages: number }> {
   try {
-    const url = `${BASE}search`;
-    console.log('[quranApi] searchAyahs URL:', url, 'query:', query, 'page:', page);
-    const res = await api.get('search', {
-      params: { q: query, size, page, language: 'en' },
+    const clientId = Constants.expoConfig?.extra?.quranClientId as string;
+    const token    = await getSearchToken();
+
+    console.log('[quranApi] searchAyahs query:', query, 'page:', page);
+
+    const res = await axios.get(QF_SEARCH_URL, {
+      params: {
+        mode: 'advanced',
+        query,
+        page,
+        size,
+        translation_ids: `${translationId}`,
+        get_text: '1',
+        highlight: '0',
+      },
+      headers: {
+        'x-auth-token': token,
+        'x-client-id': clientId,
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      timeout: 15_000,
     });
 
-    const results = res.data?.search?.results as Array<{
-      verse_key: string;
-      text: string;
-      words: Array<{ char_type: string; text: string }>;
-      translations?: Array<{ text: string; resource_id: number; name: string }>;
-    }> ?? [];
+    console.log('[quranApi] response pagination:', JSON.stringify(res.data?.pagination));
+    console.log('[quranApi] response verses:', JSON.stringify(res.data?.result));
+
+    const verses: Array<{
+      key: string;
+      arabic?: string;
+      name?: string;
+      result_type?: string;
+    }> = res.data?.result?.verses ?? [];
 
     const ayahs: Ayah[] = await Promise.all(
-      results.slice(0, 8).map(async (r) => {
-        const [surahNo, verseNo] = r.verse_key.split(':').map(Number);
-        let chapterName = 'Unknown';
+      verses.slice(0, 8).map(async (v) => {
+        const [surahNo, verseNo] = v.key.split(':').map(Number);
+
+        // Fetch the actual translation from quran.com API using the selected translationId.
+        // The QF search API's v.name is only the search-match snippet (always English),
+        // so we must re-fetch to get the correct language translation.
         try {
-          const ch = await fetchChapter(surahNo);
-          chapterName = ch.name_simple;
-        } catch {/* ignore */}
-
-        const arabicText =
-          r.text ||
-          r.words?.filter((w) => w.char_type === 'word').map((w) => w.text).join(' ') ||
-          '';
-
-        const translation =
-          r.translations?.[0]?.text?.replace(/<[^>]*>/g, '') ?? '';
-
-        return {
-          id: surahNo * 1000 + verseNo,
-          verseKey: r.verse_key,
-          surahName: chapterName,
-          surahNumber: surahNo,
-          verseNumber: verseNo,
-          arabicText,
-          translation,
-          audioUrl: buildAudioUrl(surahNo, verseNo),
-          theme,
-        };
+          const [verseRes, chapter] = await Promise.all([
+            api.get(`verses/by_key/${v.key}`, {
+              params: { language: 'en', words: false, translations: translationId },
+            }),
+            fetchChapter(surahNo),
+          ]);
+          const verseData: Verse = verseRes.data?.verse;
+          return {
+            id: surahNo * 1000 + verseNo,
+            verseKey: v.key,
+            surahName: chapter.name_simple,
+            surahNumber: surahNo,
+            verseNumber: verseNo,
+            arabicText: verseData?.text_uthmani ?? v.arabic ?? '',
+            translation: verseData?.translations?.[0]?.text?.replace(/<[^>]*>/g, '') ?? '',
+            audioUrl: buildAudioUrl(surahNo, verseNo),
+            theme,
+          };
+        } catch {
+          // Fallback: use search snippet (English) if quran.com verse fetch fails
+          let chapterName = 'Unknown';
+          try { chapterName = (await fetchChapter(surahNo)).name_simple; } catch {/* ignore */}
+          return {
+            id: surahNo * 1000 + verseNo,
+            verseKey: v.key,
+            surahName: chapterName,
+            surahNumber: surahNo,
+            verseNumber: verseNo,
+            arabicText: v.arabic ?? '',
+            translation: v.name?.replace(/<[^>]*>/g, '') ?? '',
+            audioUrl: buildAudioUrl(surahNo, verseNo),
+            theme,
+          };
+        }
       })
     );
 
-    return ayahs.filter((a) => a.arabicText && a.translation);
+    const totalPages: number = res.data?.pagination?.total_pages ?? 20;
+    return { ayahs: ayahs.filter((a) => a.arabicText && a.translation), totalPages };
   } catch (err: any) {
-    console.warn('[quranApi] searchAyahs error:', err?.response?.status, err?.config?.url ?? err?.message);
-    return [];
+    console.warn('[quranApi] searchAyahs error:',
+      err?.response?.status,
+      JSON.stringify(err?.response?.data),
+      err?.message);
+    return { ayahs: [], totalPages: 20 };
   }
 }
 
 export async function fetchVersesByChapter(
   chapterId: number,
-  limit = 10
+  limit = 10,
+  translationId: number = DEFAULT_TRANSLATION_ID
 ): Promise<Ayah[]> {
   try {
     const [res, chapter] = await Promise.all([
@@ -143,7 +415,7 @@ export async function fetchVersesByChapter(
         params: {
           language: 'en',
           words: false,
-          translations: TRANSLATION_ID,
+          translations: translationId,
           per_page: limit,
           page: 1,
         },
@@ -164,6 +436,114 @@ export async function fetchChapters(): Promise<Chapter[]> {
     const res = await api.get('chapters', { params: { language: 'en' } });
     return res.data?.chapters ?? [];
   } catch {
+    return [];
+  }
+}
+
+// ─── Tafsir ───────────────────────────────────────────────────────────────────
+
+/**
+ * Best tafsir resource ID per selected language (display name from LanguageOption).
+ * Only languages with a native tafsir on quran.com are listed.
+ * All others fall back to Ibn Kathir (Abridged) English — ID 169.
+ */
+const TAFSIR_BY_LANGUAGE: Record<string, { id: number; name: string }> = {
+  English:   { id: 169, name: "Ibn Kathir (Abridged)" },
+  Arabic:    { id: 16,  name: "Tafsir Muyassar" },
+  Urdu:      { id: 160, name: "Tafsir Ibn Kathir (Urdu)" },
+  Bengali:   { id: 381, name: "Tafsir Fathul Majid" },
+  Russian:   { id: 170, name: "Al-Sa'di" },
+  Kurdish:   { id: 804, name: "Rebar Kurdish Tafsir" },
+};
+
+export function getTafsirForLanguage(language: string): { id: number; name: string; isNative: boolean } {
+  const entry = TAFSIR_BY_LANGUAGE[language];
+  if (entry) return { ...entry, isNative: true };
+  return { id: 169, name: "Ibn Kathir (Abridged)", isNative: false };
+}
+
+export const TAFSIR_IBN_KATHIR_ID = 169;
+
+export interface TafsirResult {
+  resourceName: string;
+  text: string; // HTML string — strip tags before display
+  isNative: boolean; // false = fell back to English
+  selectedLanguage: string;
+}
+
+export async function fetchTafsir(
+  verseKey: string,
+  language = 'English',
+): Promise<TafsirResult | null> {
+  const { id: resourceId, name: tafsirName, isNative } = getTafsirForLanguage(language);
+  try {
+    const clientId = Constants.expoConfig?.extra?.quranClientId as string;
+    const token    = await getContentToken();
+
+    const res = await axios.get(
+      `${QF_CONTENT_URL}/tafsirs/${resourceId}/by_ayah/${verseKey}`,
+      {
+        headers: {
+          'x-auth-token': token,
+          'x-client-id': clientId,
+          Accept: 'application/json',
+        },
+        timeout: 15_000,
+      }
+    );
+
+    const tafsir = res.data?.tafsir;
+    if (!tafsir?.text) return null;
+
+    return {
+      resourceName: tafsirName,
+      text: tafsir.text,
+      isNative,
+      selectedLanguage: language,
+    };
+  } catch (err: any) {
+    console.warn('[quranApi] fetchTafsir error:',
+      err?.response?.status,
+      JSON.stringify(err?.response?.data),
+      err?.message);
+    return null;
+  }
+}
+
+// ─── Word-by-word translation ─────────────────────────────────────────────────
+
+const WBW_AUDIO_BASE = 'https://audio.qurancdn.com/';
+
+export interface WordData {
+  position: number;
+  arabic: string;
+  transliteration: string;
+  translation: string;
+  audioUrl: string | null;
+}
+
+export async function fetchWordByWord(verseKey: string): Promise<WordData[]> {
+  try {
+    const res = await axios.get(`${BASE}verses/by_key/${verseKey}`, {
+      params: {
+        words: true,
+        word_fields: 'text_uthmani,translation,transliteration,audio_url',
+      },
+      headers: { Accept: 'application/json' },
+      timeout: 10_000,
+    });
+    const words: any[] = res.data?.verse?.words ?? [];
+    return words
+      .filter((w: any) => w.char_type_name !== 'end')   // skip verse-end symbols
+      .map((w: any, i: number) => ({
+        position: i + 1,
+        arabic: w.text_uthmani ?? '',
+        transliteration: w.transliteration?.text ?? '',
+        translation: w.translation?.text ?? '',
+        audioUrl: w.audio_url ? `${WBW_AUDIO_BASE}${w.audio_url}` : null,
+      }));
+  } catch (err: any) {
+    console.warn('[quranApi] fetchWordByWord error:', err?.response?.status, err?.message);
     return [];
   }
 }

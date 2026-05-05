@@ -100,6 +100,7 @@ export interface MoodOption {
 
 export type RootStackParamList = {
   Splash: undefined;
+  Onboarding: undefined;
   Home: undefined;
   Loading: { mood: Mood };
   Main: undefined;

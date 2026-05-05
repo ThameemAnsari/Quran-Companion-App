@@ -1,5 +1,6 @@
 import React from 'react';
 import {
+  Alert,
   Modal,
   View,
   Text,
@@ -36,19 +37,29 @@ export const NotificationPermissionModal: React.FC<Props> = ({ visible, onDismis
   async function handleEnable() {
     // Mark shown regardless of outcome so we never show again
     setPermissionScreenShown(true);
-    onDismiss();
 
     const granted = await requestNotificationPermission();
 
     if (granted) {
-      // Schedule a generic 8:30 PM reminder; App.tsx will personalise it
-      // with streak/mood content the next time the app goes to background.
+      // Set enabled BEFORE dismissing so the Profile toggle reflects it immediately
+      setNotificationsEnabled(true);
       await scheduleSmartDailyReminder(
         { lastActiveDate: null, streak: 0, selectedMood: null,
           lastNotificationTime: null, comebackSentDate: null, notificationsEnabled: true },
         20, 30
       );
-      setNotificationsEnabled(true);
+
+      // Android: prompt user to disable battery optimization so alarms fire reliably
+      if (Platform.OS === 'android') {
+        Alert.alert(
+          'One more step for Android',
+          'To ensure reminders arrive even when the app is closed, please disable battery optimization for Quran Companion.\n\nGo to: Battery → "Don\'t optimize" or "Unrestricted"',
+          [
+            { text: 'Open Settings', onPress: () => Linking.openSettings() },
+            { text: 'Skip', style: 'cancel' },
+          ]
+        );
+      }
     } else {
       // System denied — record date for soft follow-up message
       setPermissionDeniedDate(new Date().toISOString().split('T')[0]);
@@ -57,6 +68,8 @@ export const NotificationPermissionModal: React.FC<Props> = ({ visible, onDismis
         Linking.openURL('app-settings:');
       }
     }
+
+    onDismiss();
   }
 
   function handleLater() {

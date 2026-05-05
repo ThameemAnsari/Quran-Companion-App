@@ -3,13 +3,13 @@ import {
   View,
   Text,
   StyleSheet,
-  SafeAreaView,
   ScrollView,
   TouchableOpacity,
   StatusBar,
   Animated,
   Alert,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import type { CompositeScreenProps } from '@react-navigation/native';
 import type { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
@@ -19,6 +19,9 @@ import { useAppStore } from '../store/useAppStore';
 import { AudioPlayer } from '../components/AudioPlayer';
 import { NotificationPermissionModal } from '../components/NotificationPermissionModal';
 import { AddToCollectionSheet } from '../components/AddToCollectionSheet';
+import { TafsirModal } from '../components/TafsirModal';
+import { fetchWordByWord, type WordData } from '../services/quranApi';
+import { useAudioPlayer, useAudioPlayerStatus } from 'expo-audio';
 
 type Props = CompositeScreenProps<
   BottomTabScreenProps<MainTabParamList, 'ForYou'>,
@@ -29,9 +32,15 @@ export const AyahScreen: React.FC<Props> = ({ navigation }) => {
   const { currentAyah, nextAyah, addBookmark, removeBookmark, isBookmarked, incrementAyahsRead, addTimeSpent,
     permissionScreenShown, notificationsEnabled, weekStats, permissionDeniedDate, selectedMood } =
     useAppStore();
-  const [showExplanation, setShowExplanation] = useState(true);
+  const [showExplanation, setShowExplanation] = useState(false);
+  const [wordByWord, setWordByWord] = useState<WordData[]>([]);
+  const [wbwLoading, setWbwLoading] = useState(false);
+  const [playingPos, setPlayingPos] = useState<number | null>(null);
+  const wordPlayer = useAudioPlayer(null);
+  const wordStatus = useAudioPlayerStatus(wordPlayer);
   const [showPermissionModal, setShowPermissionModal] = useState(false);
   const [showCollectionSheet, setShowCollectionSheet] = useState(false);
+  const [showTafsir, setShowTafsir] = useState(false);
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(20)).current;
   const scrollRef = useRef<ScrollView>(null);
@@ -65,11 +74,39 @@ export const AyahScreen: React.FC<Props> = ({ navigation }) => {
     if (currentAyah) incrementAyahsRead();
   }, [currentAyah?.verseKey]);
 
-  // Show pre-permission screen after user reads first ayah (~30s in).
+  // Fetch word-by-word when ayah changes (reset collapsed state)
+  useEffect(() => {
+    if (!currentAyah) return;
+    setShowExplanation(false);
+    setWordByWord([]);
+    setWbwLoading(false);
+    setPlayingPos(null);
+    wordPlayer.pause();
+  }, [currentAyah?.verseKey]);
+
+  // Auto-reset highlight when word audio finishes
+  useEffect(() => {
+    if (wordStatus.didJustFinish) setPlayingPos(null);
+  }, [wordStatus.didJustFinish]);
+
+  // Drive audio from state — avoids stale-closure race conditions
+  useEffect(() => {
+    if (playingPos === null) {
+      wordPlayer.pause();
+      return;
+    }
+    const word = wordByWord.find((w) => w.position === playingPos);
+    if (word?.audioUrl) {
+      wordPlayer.replace({ uri: word.audioUrl });
+      wordPlayer.play();
+    }
+  }, [playingPos]);
+
+  // Show pre-permission screen after user sees first ayah (~5s in).
   // Re-show after 2 days if user previously tapped "Maybe Later".
   useEffect(() => {
     if (notificationsEnabled) return;
-    if (weekStats.ayahsRead < 1) return;
+    if (!currentAyah) return;
 
     if (permissionScreenShown) {
       // Re-ask only if user tapped "Maybe Later" and 2+ days have passed
@@ -81,15 +118,15 @@ export const AyahScreen: React.FC<Props> = ({ navigation }) => {
 
     permTimerRef.current = setTimeout(() => {
       setShowPermissionModal(true);
-    }, 30_000);
+    }, 5_000);
     return () => {
       if (permTimerRef.current) clearTimeout(permTimerRef.current);
     };
-  }, [weekStats.ayahsRead]);
+  }, [currentAyah?.verseKey]);
 
   if (!currentAyah) {
     return (
-      <SafeAreaView style={styles.safe}>
+      <SafeAreaView style={styles.safe} edges={['top']}>
         <View style={styles.empty}>
           <Text style={styles.emptyIcon}>📖</Text>
           <Text style={styles.emptyTitle}>No ayah loaded</Text>
@@ -110,7 +147,7 @@ export const AyahScreen: React.FC<Props> = ({ navigation }) => {
   };
 
   return (
-    <SafeAreaView style={styles.safe}>
+    <SafeAreaView style={styles.safe} edges={['top']}>
       <StatusBar barStyle="dark-content" backgroundColor="#F5F7F2" />
 
       {/* Pre-permission modal — shown once after first ayah */}
@@ -127,6 +164,14 @@ export const AyahScreen: React.FC<Props> = ({ navigation }) => {
         onCreateNew={() =>
           (navigation as any).navigate('CreateCollection', { ayahToAdd: currentAyah })
         }
+      />
+
+      {/* Tafsir popup */}
+      <TafsirModal
+        visible={showTafsir}
+        verseKey={currentAyah.verseKey}
+        surahName={currentAyah.surahName}
+        onClose={() => setShowTafsir(false)}
       />
 
       {/* Header */}
@@ -204,34 +249,91 @@ export const AyahScreen: React.FC<Props> = ({ navigation }) => {
           <AudioPlayer audioUrl={currentAyah.audioUrl} />
         </View>
 
-        {/* Why this ayah? */}
-        <View style={styles.explanationCard}>
+        {/* Word by Word */}
+        <View style={styles.wbwCard}>
           <TouchableOpacity
-            style={styles.explanationHeader}
-            onPress={() => setShowExplanation((v) => !v)}
+            style={styles.wbwHeader}
+            onPress={async () => {
+              const next = !showExplanation;
+              setShowExplanation(next);
+              if (next && wordByWord.length === 0 && !wbwLoading) {
+                setWbwLoading(true);
+                const words = await fetchWordByWord(currentAyah.verseKey);
+                setWordByWord(words);
+                setWbwLoading(false);
+              }
+            }}
             activeOpacity={0.8}
           >
-            <View style={styles.explanationTitleRow}>
-              <Ionicons name="bulb-outline" size={18} color="#2E7D32" />
-              <Text style={styles.explanationTitle}>Why this ayah?</Text>
+            <View style={styles.wbwHeaderLeft}>
+              <View style={styles.wbwIconWrap}>
+                <Ionicons name="language-outline" size={17} color="#2E7D32" />
+              </View>
+              <View>
+                <Text style={styles.wbwHeaderTitle}>Word by Word</Text>
+                <Text style={styles.wbwHeaderSub}>Tap each word to explore meaning</Text>
+              </View>
             </View>
-            <Ionicons
-              name={showExplanation ? 'chevron-up' : 'chevron-down'}
-              size={18}
-              color="#9CA3AF"
-            />
+            <View style={styles.wbwHeaderRight}>
+              {!showExplanation && wordByWord.length > 0 && (
+                <View style={styles.wbwBadge}>
+                  <Text style={styles.wbwBadgeText}>{wordByWord.length}</Text>
+                </View>
+              )}
+              <Ionicons
+                name={showExplanation ? 'chevron-up' : 'chevron-down'}
+                size={18}
+                color="#9CA3AF"
+              />
+            </View>
           </TouchableOpacity>
+
           {showExplanation && (
-            <Text style={styles.explanationText}>
-              {currentAyah.explanation ??
-                'This ayah was selected because it resonates with your current emotional state and offers divine guidance and comfort.'}
-            </Text>
+            <>
+              <View style={styles.wbwDivider} />
+              {wbwLoading ? (
+                <View style={styles.wbwLoadingRow}>
+                  {[1, 2, 3, 4].map((i) => (
+                    <View key={i} style={styles.wbwSkeleton} />
+                  ))}
+                </View>
+              ) : (
+                <View style={styles.wbwContainer}>
+                  {wordByWord.map((w) => {
+                    const isPlaying = playingPos === w.position;
+                    return (
+                      <TouchableOpacity
+                        key={w.position}
+                        style={[styles.wbwWord, isPlaying && styles.wbwWordActive]}
+                        activeOpacity={0.75}
+                        onPress={() => {
+                          if (!w.audioUrl) return;
+                          setPlayingPos(isPlaying ? null : w.position);
+                        }}
+                      >
+                        <View style={styles.wbwPosBadge}>
+                          <Text style={styles.wbwPosText}>{w.position}</Text>
+                        </View>
+                        {isPlaying ? (
+                          <Text style={[styles.wbwArabic, styles.wbwArabicActive]}>{w.arabic}</Text>
+                        ) : (
+                          <Text style={styles.wbwArabic}>{w.arabic}</Text>
+                        )}
+                        <View style={styles.wbwWordDivider} />
+                        <Text style={[styles.wbwTranslit, isPlaying && styles.wbwTranslitActive]}>{w.transliteration}</Text>
+                        <Text style={styles.wbwMeaning}>{w.translation}</Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              )}
+            </>
           )}
         </View>
 
         {/* Action buttons */}
         <View style={styles.actions}>
-          {/* Row 1: Bookmark + Reflect */}
+          {/* Row 1: Bookmark + Reflect + Tafsir */}
           <View style={styles.actionsRow}>
             <TouchableOpacity style={[styles.actionBtn, styles.actionBtnFlex]} onPress={toggleBookmark}>
               <Ionicons
@@ -250,6 +352,14 @@ export const AyahScreen: React.FC<Props> = ({ navigation }) => {
             >
               <Ionicons name="pencil-outline" size={20} color="#6B7280" />
               <Text style={styles.actionLabel}>Reflect</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.actionBtn, styles.actionBtnFlex]}
+              onPress={() => setShowTafsir(true)}
+            >
+              <Ionicons name="book-outline" size={20} color="#6B7280" />
+              <Text style={styles.actionLabel}>Tafsir</Text>
             </TouchableOpacity>
           </View>
 
@@ -436,6 +546,166 @@ const styles = StyleSheet.create({
     color: '#4B5563',
     lineHeight: 22,
     marginTop: 12,
+  },
+  // ── Word-by-Word card ──────────────────────────────────────────────
+  wbwCard: {
+    backgroundColor: '#fff',
+    borderRadius: 18,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.07,
+    shadowRadius: 10,
+    elevation: 3,
+    borderLeftWidth: 4,
+    borderLeftColor: '#2E7D32',
+  },
+  wbwHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+  },
+  wbwHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    flex: 1,
+  },
+  wbwIconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: '#E8F5E9',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  wbwHeaderTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#1B1B1B',
+    letterSpacing: -0.2,
+  },
+  wbwHeaderSub: {
+    fontSize: 11,
+    color: '#9CA3AF',
+    marginTop: 1,
+  },
+  wbwHeaderRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  wbwBadge: {
+    backgroundColor: '#E8F5E9',
+    borderRadius: 10,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+  },
+  wbwBadgeText: {
+    fontSize: 12,
+    color: '#2E7D32',
+    fontWeight: '700',
+  },
+  wbwDivider: {
+    height: 1,
+    backgroundColor: '#F3F4F6',
+    marginHorizontal: 16,
+  },
+  wbwContainer: {
+    flexDirection: 'row-reverse',
+    flexWrap: 'wrap',
+    gap: 10,
+    padding: 16,
+  },
+  wbwWord: {
+    alignItems: 'center',
+    backgroundColor: '#FAFAFA',
+    borderRadius: 14,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    minWidth: 68,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    borderTopWidth: 3,
+    borderTopColor: '#2E7D32',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 4,
+    elevation: 1,
+  },
+  wbwWordActive: {
+    backgroundColor: '#E8F5E9',
+    borderColor: '#2E7D32',
+    borderTopColor: '#1B5E20',
+    shadowOpacity: 0.1,
+    elevation: 3,
+  },
+  wbwPosBadge: {
+    position: 'absolute',
+    top: -1,
+    right: 6,
+    backgroundColor: '#2E7D32',
+    borderBottomLeftRadius: 6,
+    borderBottomRightRadius: 6,
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+  },
+  wbwPosText: {
+    fontSize: 9,
+    color: '#fff',
+    fontWeight: '700',
+  },
+  wbwArabic: {
+    fontSize: 22,
+    color: '#1B1B1B',
+    fontWeight: '500',
+    marginTop: 8,
+    marginBottom: 6,
+    writingDirection: 'rtl',
+    lineHeight: 32,
+  },
+  wbwArabicActive: {
+    color: '#2E7D32',
+  },
+  wbwWordDivider: {
+    width: '80%',
+    height: 1,
+    backgroundColor: '#E5E7EB',
+    marginBottom: 5,
+  },
+  wbwTranslit: {
+    fontSize: 10,
+    color: '#9CA3AF',
+    fontStyle: 'italic',
+    marginBottom: 3,
+    textAlign: 'center',
+  },
+  wbwTranslitActive: {
+    color: '#2E7D32',
+  },
+  wbwMeaning: {
+    fontSize: 11,
+    color: '#2E7D32',
+    fontWeight: '700',
+    textAlign: 'center',
+    maxWidth: 80,
+  },
+  wbwLoadingRow: {
+    flexDirection: 'row',
+    gap: 10,
+    padding: 16,
+    flexWrap: 'wrap',
+  },
+  wbwSkeleton: {
+    width: 68,
+    height: 90,
+    borderRadius: 14,
+    backgroundColor: '#F0FDF4',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
   },
   actions: {
     flexDirection: 'column',

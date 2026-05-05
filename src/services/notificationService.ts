@@ -20,7 +20,8 @@ import type { Mood } from '../types';
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
-    shouldShowAlert: true,
+    shouldShowBanner: true,
+    shouldShowList: true,
     shouldPlaySound: false,
     shouldSetBadge: false,
   }),
@@ -157,20 +158,36 @@ function isNightWindow(): boolean {
  * Returns true if granted.
  */
 export async function requestNotificationPermission(): Promise<boolean> {
-  if (!Device.isDevice) return false; // Emulators don't support push
+  console.log('[notif] requestNotificationPermission: isDevice =', Device.isDevice, '| OS =', Platform.OS);
 
   if (Platform.OS === 'android') {
     await Notifications.setNotificationChannelAsync('quran-companion', {
       name: 'Quran Companion',
-      importance: Notifications.AndroidImportance.HIGH, // HIGH = heads-up banner visible
+      importance: Notifications.AndroidImportance.HIGH,
       sound: null,
     });
   }
 
   const { status: existing } = await Notifications.getPermissionsAsync();
-  if (existing === 'granted') return true;
+  console.log('[notif] existing permission status:', existing);
+  if (existing === 'granted') {
+    // On Android 12+ (API 31+) also request exact alarm permission so
+    // notifications fire on time from killed/background state.
+    if (Platform.OS === 'android' && Number(Platform.Version) >= 31) {
+      await Notifications.requestPermissionsAsync({ android: { alarm: true } } as any);
+    }
+    return true;
+  }
 
-  const { status } = await Notifications.requestPermissionsAsync();
+  // Request notification permission. On Android 12+, also request exact alarms —
+  // this opens the "Alarms & Reminders" settings page so the user can grant it.
+  const requestOptions =
+    Platform.OS === 'android' && Number(Platform.Version) >= 31
+      ? ({ android: { alarm: true } } as any)
+      : {};
+
+  const { status } = await Notifications.requestPermissionsAsync(requestOptions);
+  console.log('[notif] after request, status:', status);
   return status === 'granted';
 }
 
@@ -357,11 +374,11 @@ export async function scheduleSmartDailyReminder(
       sound: false,
     },
     trigger: {
+      type: Notifications.SchedulableTriggerInputTypes.DAILY,
       channelId: Platform.OS === 'android' ? 'quran-companion' : undefined,
       hour,
       minute,
-      repeats: true,
-    } as Notifications.DailyTriggerInput,
+    },
   });
 }
 
@@ -369,4 +386,23 @@ export async function scheduleSmartDailyReminder(
 
 export async function cancelAllNotifications(): Promise<void> {
   await Notifications.cancelAllScheduledNotificationsAsync();
+}
+
+// ─── Test function to verify notifications work at all (sends after 10s) ──
+export async function scheduleTestNotification(): Promise<void> {
+  await Notifications.scheduleNotificationAsync({
+    content: {
+      title: 'Test',
+      body: 'Notifications are working ✓',
+      data: { screen: 'Home' },
+      sound: false,
+    },
+    trigger: {
+      type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
+      channelId: Platform.OS === 'android' ? 'quran-companion' : undefined,
+      seconds: 15,
+      repeats: false,
+    },
+  });
+  console.log('[notif] Test notification scheduled — fire in 15s');
 }

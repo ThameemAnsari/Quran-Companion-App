@@ -4,11 +4,13 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
 import { Platform, View, StyleSheet } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import type { RootStackParamList, MainTabParamList } from '../types';
 
 // ─── Screens ──────────────────────────────────────────────────────────────────
 import { SplashScreen } from '../screens/SplashScreen';
+import { OnboardingScreen } from '../screens/OnboardingScreen';
 import { HomeScreen } from '../screens/HomeScreen';
 import { LoadingScreen } from '../screens/LoadingScreen';
 import { AyahScreen } from '../screens/AyahScreen';
@@ -25,13 +27,16 @@ const Tab = createBottomTabNavigator<MainTabParamList>();
 // ─── Bottom Tab Navigator ─────────────────────────────────────────────────────
 
 function MainTabs() {
+  const insets = useSafeAreaInsets();
+  const tabBarHeight = (Platform.OS === 'ios' ? 56 : 56) + insets.bottom;
+
   return (
     <Tab.Navigator
       screenOptions={({ route }) => ({
         headerShown: false,
         tabBarShowLabel: true,
         tabBarLabelStyle: { fontSize: 10, fontWeight: '600', marginBottom: 2 },
-        tabBarStyle: styles.tabBar,
+        tabBarStyle: [styles.tabBar, { height: tabBarHeight, paddingBottom: insets.bottom + 6 }],
         tabBarActiveTintColor: '#2E7D32',
         tabBarInactiveTintColor: '#9CA3AF',
         tabBarIcon: ({ color, size, focused }) => {
@@ -80,6 +85,11 @@ export function AppNavigator() {
           component={SplashScreen}
           options={{ animation: 'none' }}
         />
+        <Stack.Screen
+          name="Onboarding"
+          component={OnboardingScreen}
+          options={{ animation: 'fade' }}
+        />
         <Stack.Screen name="Home" component={HomeScreen} />
         <Stack.Screen
           name="Loading"
@@ -116,9 +126,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     borderTopWidth: 1,
     borderTopColor: '#F3F4F6',
-    height: Platform.OS === 'ios' ? 82 : 62,
     paddingTop: 6,
-    paddingBottom: Platform.OS === 'ios' ? 24 : 6,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: -2 },
     shadowOpacity: 0.05,

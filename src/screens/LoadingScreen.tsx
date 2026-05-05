@@ -3,11 +3,11 @@ import {
   View,
   Text,
   StyleSheet,
-  SafeAreaView,
   StatusBar,
   Animated,
+  Image,
 } from 'react-native';
-import { Image } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
 import type { RootStackParamList } from '../types';
@@ -24,7 +24,7 @@ const STEPS = [
 
 export const LoadingScreen: React.FC<Props> = ({ navigation, route }) => {
   const { mood } = route.params;
-  const { setAyahList } = useAppStore();
+  const { setAyahList, selectedTranslationId } = useAppStore();
   const [completedSteps, setCompletedSteps] = useState<number[]>([]);
   const [currentStep, setCurrentStep] = useState(0);
 
@@ -59,7 +59,7 @@ export const LoadingScreen: React.FC<Props> = ({ navigation, route }) => {
 
     // Fetch ayahs and navigate
     let mounted = true;
-    getAyahsForMood(mood).then((ayahs) => {
+    getAyahsForMood(mood, selectedTranslationId).then((ayahs) => {
       if (!mounted) return;
       setAyahList(ayahs);
       setTimeout(() => {

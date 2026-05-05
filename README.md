@@ -15,13 +15,29 @@ A beautifully designed React Native (Expo) app that helps users build a consiste
 
 ### 📿 For You — Ayah Reader
 - Arabic text with full Uthmani script
-- English translation (Sahih International)
+- Translation in 50+ languages (user-selected)
 - Audio recitation by Mishary Alafasy (streaming MP3)
-- Contextual AI-generated explanation for each Ayah
 - Bookmark any Ayah with one tap
 - Write a personal reflection on any Ayah
 - Add Ayahs to custom collections
 - Next Ayah button scrolls back to top automatically
+- **Tafsir** — deep explanations powered by Quran Foundation API (language-aware)
+- **Word by Word translation** — tap any word to hear its pronunciation and see Arabic, transliteration & English meaning
+
+### 🔤 Word by Word Translation
+- Expandable card on every Ayah screen
+- Each Arabic word shown as a chip: Arabic script → transliteration → English meaning
+- Words flow **right-to-left**, matching the natural Quran reading order
+- **Tap any word to hear its pronunciation** (audio from audio.qurancdn.com)
+- Active word highlights in green while playing; auto-resets when audio finishes
+- Lazy-loaded on first expand — no unnecessary API calls
+- Powered by `api.quran.com/api/v4/verses/by_key?words=true`
+
+### 🌍 Multi-Language Translation
+- Choose from **50+ languages** in Profile settings
+- Translation persisted across sessions via AsyncStorage
+- Tafsir automatically selects the best available resource for the chosen language
+- Word-by-word pronunciation always available (English meanings only)
 
 ### 🔖 Bookmarks
 - Save favourite Ayahs for later
@@ -76,7 +92,14 @@ A beautifully designed React Native (Expo) app that helps users build a consiste
 ### 👤 Profile
 - App icon displayed as avatar
 - Personal stats: Streak, Bookmarks, Reflections, Time Spent
-- Settings rows: Daily Reminders, Translation Language, Reciter, Dark Mode (coming soon)
+- Settings rows: Daily Reminders, Translation Language (static display), Reciter, Share App, About
+
+### 🎬 Onboarding (5 slides)
+1. **Mood-Based Discovery** — select your feeling, get a matching Ayah
+2. **Read in your language** — 50+ translation languages
+3. **Word by Word** — tap each word to explore meaning and pronunciation
+4. **Reflect & Personalise** — bookmarks, collections, reflections
+5. **Stay Consistent** — streak tracker and daily reminders
 
 ### 🎨 UI / UX
 - Consistent collapsible card pattern across all list screens
@@ -91,18 +114,17 @@ A beautifully designed React Native (Expo) app that helps users build a consiste
 
 | Library | Version | Purpose |
 |---|---|---|
-| React Native | 0.74.5 | Core framework |
-| Expo SDK | 51 | Build tooling & native APIs |
+| React Native | 0.81.5 | Core framework |
+| Expo SDK | 54 | Build tooling & native APIs |
 | TypeScript | 5.x | Type safety |
-| Zustand | 4.5.4 | State management |
-| AsyncStorage | 1.23.1 | Persistent local storage |
+| Zustand | 4.x | State management |
+| AsyncStorage | 2.x | Persistent local storage |
 | React Navigation | 6.x | Stack + bottom tab navigation |
-| expo-av | ~14.0.7 | Audio playback |
-| expo-notifications | ~0.28.19 | Push / local notifications |
-| expo-device | ~6.0.2 | Device detection |
-| expo-linear-gradient | ~13.0.2 | Gradient UI elements |
+| expo-audio | ~0.4.x | Audio playback (verse + word-by-word) |
+| expo-notifications | ~0.29.x | Push / local notifications |
+| expo-device | ~7.x | Device detection |
 | NativeWind | 4.x | Tailwind-style utility classes |
-| axios | 1.7.2 | HTTP client |
+| axios | 1.x | HTTP client |
 | @expo/vector-icons | 14.x | Ionicons icon set |
 
 ---
@@ -111,9 +133,8 @@ A beautifully designed React Native (Expo) app that helps users build a consiste
 
 ### Prerequisites
 - Node.js 18+
-- Expo Go app on iOS/Android **or** a physical device for APK testing
-- npm or yarn
-- (For APK builds) An [Expo account](https://expo.dev) + EAS CLI
+- Android Studio / emulator **or** a physical Android device
+- npm
 
 ### Run in development
 
@@ -125,11 +146,9 @@ cd Quran-Companion-App
 # Install dependencies
 npm install
 
-# Start the dev server
-npx expo start --clear
+# Run on Android (builds a dev client)
+npx expo run:android
 ```
-
-Scan the QR code with **Expo Go** on your device.
 
 ### Build a standalone APK (Android)
 
@@ -157,14 +176,16 @@ src/
 │   ├── AudioPlayer.tsx            # Streaming audio player
 │   ├── AyahCard.tsx               # Reusable ayah card
 │   ├── MoodCard.tsx               # Mood selector card
-│   └── NotificationPermissionModal.tsx
+│   ├── NotificationPermissionModal.tsx
+│   └── TafsirModal.tsx            # Full-page tafsir viewer (language-aware)
 ├── navigation/
 │   └── AppNavigator.tsx           # Stack + bottom tabs
 ├── screens/
 │   ├── SplashScreen.tsx           # Animated splash
+│   ├── OnboardingScreen.tsx       # 5-slide onboarding flow
 │   ├── HomeScreen.tsx             # Mood selector
 │   ├── LoadingScreen.tsx          # Ayah fetching screen
-│   ├── AyahScreen.tsx             # Core ayah reader
+│   ├── AyahScreen.tsx             # Core ayah reader (tafsir + word by word)
 │   ├── BookmarkScreen.tsx         # Saved ayahs & reflections
 │   ├── CollectionsScreen.tsx      # All collections
 │   ├── CollectionDetailScreen.tsx # Ayahs inside a collection
@@ -173,9 +194,9 @@ src/
 │   ├── ProgressScreen.tsx         # Streak, stats, history
 │   └── ProfileScreen.tsx          # User profile & settings
 ├── services/
-│   ├── aiService.ts               # AI explanation generation
+│   ├── aiService.ts               # Explanation generation (on-device pool)
 │   ├── notificationService.ts     # Smart notification engine (priority-based, lifecycle-aware)
-│   └── quranApi.ts                # Quran.com API + audio URL builder
+│   └── quranApi.ts                # Quran.com API + word-by-word + tafsir + audio
 ├── store/
 │   └── useAppStore.ts             # Zustand global store
 └── types/
@@ -190,8 +211,13 @@ eas.json                           # EAS Build profiles (preview APK / productio
 
 ## 🌐 APIs Used
 
-- **Quran Text & Translation**: [api.quran.com/api/v4](https://api.quran.com/api/v4/) — free, no auth required
-- **Audio Recitation**: [verses.quran.com](https://verses.quran.com) — Mishary Alafasy 128 kbps MP3
+| API | Auth | Purpose |
+|---|---|---|
+| [api.quran.com/api/v4](https://api.quran.com/api/v4/) | None | Verse text, translations, word-by-word data |
+| [cdn.islamic.network](https://cdn.islamic.network/quran/audio/128/ar.alafasy) | None | Full verse audio (Mishary Alafasy) |
+| [audio.qurancdn.com](https://audio.qurancdn.com) | None | Word-by-word pronunciation audio |
+| [apis.quran.foundation](https://apis.quran.foundation/content/api/v4) | OAuth2 `content` | Tafsir (Ibn Kathir + language-native) |
+| [apis.quran.foundation/search](https://apis.quran.foundation/search/v1) | OAuth2 `search` | Mood-based ayah search |
 
 ---
 

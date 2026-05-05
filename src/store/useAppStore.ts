@@ -41,6 +41,14 @@ interface AppState {
   permissionScreenShown: boolean;
   /** ISO date user tapped "Maybe Later" — used for 2-day re-ask cooldown */
   permissionDeniedDate: string | null;
+  /** Whether the user has seen the onboarding slides (show only on first launch) */
+  hasSeenOnboarding: boolean;
+
+  // ── translation
+  /** Quran.com translation resource ID (default: 131 = The Clear Quran) */
+  selectedTranslationId: number;
+  /** Human-readable name shown in UI */
+  selectedTranslationName: string;
 
   // ── actions
   setMood: (mood: Mood) => void;
@@ -71,6 +79,8 @@ interface AppState {
   setNotificationsEnabled: (enabled: boolean) => void;
   setPermissionScreenShown: (shown: boolean) => void;
   setPermissionDeniedDate: (date: string | null) => void;
+  setHasSeenOnboarding: (seen: boolean) => void;
+  setTranslation: (id: number, name: string) => void;
 }
 
 const todayStr = () => {
@@ -108,6 +118,9 @@ export const useAppStore = create<AppState>()(
       notificationsEnabled: false,
       permissionScreenShown: false,
       permissionDeniedDate: null,
+      hasSeenOnboarding: false,
+      selectedTranslationId: 85,
+      selectedTranslationName: 'English',
 
       setMood: (mood) => set({ selectedMood: mood }),
 
@@ -132,12 +145,13 @@ export const useAppStore = create<AppState>()(
         if (nearEnd && hasMoreAyahs && !isFetchingMore && selectedMood) {
           set({ isFetchingMore: true });
           try {
-            const { ayahList: currentList } = get();
+            const { ayahList: currentList, selectedTranslationId } = get();
             const existingKeys = new Set(currentList.map((a) => a.verseKey));
             const { ayahs: fresh, nextAttempt, exhausted } = await fetchMoreAyahsForMood(
               selectedMood,
               fetchAttempt,
               existingKeys,
+              selectedTranslationId,
             );
             const { ayahList: latestList } = get();
             set({
@@ -285,6 +299,8 @@ export const useAppStore = create<AppState>()(
       setNotificationsEnabled: (enabled) => set({ notificationsEnabled: enabled }),
       setPermissionScreenShown: (shown) => set({ permissionScreenShown: shown }),
       setPermissionDeniedDate: (date) => set({ permissionDeniedDate: date }),
+      setHasSeenOnboarding: (seen) => set({ hasSeenOnboarding: seen }),
+      setTranslation: (id, name) => set({ selectedTranslationId: id, selectedTranslationName: name }),
     }),
     {
       name: 'quran-companion-storage',
@@ -301,6 +317,9 @@ export const useAppStore = create<AppState>()(
         notificationsEnabled: s.notificationsEnabled,
         permissionScreenShown: s.permissionScreenShown,
         permissionDeniedDate: s.permissionDeniedDate,
+        hasSeenOnboarding: s.hasSeenOnboarding,
+        selectedTranslationId: s.selectedTranslationId,
+        selectedTranslationName: s.selectedTranslationName,
       }),
     }
   )

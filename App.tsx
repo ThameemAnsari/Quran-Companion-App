@@ -1,6 +1,6 @@
 import 'react-native-url-polyfill/auto';
 import React, { useEffect, useRef } from 'react';
-import { AppState, AppStateStatus } from 'react-native';
+import { AppState, AppStateStatus, Platform } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import * as Notifications from 'expo-notifications';
@@ -9,6 +9,7 @@ import { useAppStore } from './src/store/useAppStore';
 import {
   evaluateAndSendNotification,
   scheduleSmartDailyReminder,
+  scheduleTestNotification,
 } from './src/services/notificationService';
 
 function NotificationBootstrap() {
@@ -25,8 +26,16 @@ function NotificationBootstrap() {
 
   const appState = useRef<AppStateStatus>(AppState.currentState);
 
-  // Build the context object used by both evaluate and schedule functions
-  const ctx = {
+  // Always-fresh ctx via ref — avoids stale closure in async callbacks
+  const ctxRef = useRef({
+    lastActiveDate,
+    streak,
+    selectedMood,
+    lastNotificationTime,
+    comebackSentDate,
+    notificationsEnabled,
+  });
+  ctxRef.current = {
     lastActiveDate,
     streak,
     selectedMood,
@@ -35,18 +44,35 @@ function NotificationBootstrap() {
     notificationsEnabled,
   };
 
-  // ── Bootstrap on mount ────────────────────────────────────────────────────
-  // When the app opens:
-  //   1. Cancel any pending scheduled notification (user is now active)
-  //   2. Evaluate and send an immediate notification if conditions met
-  //      (e.g. app opened at 9 PM after being inactive all day)
+  // ── Bootstrap ─────────────────────────────────────────────────────────────
+  // Depends on notificationsEnabled so it runs AFTER AsyncStorage hydrates
+  // (store initialises with notificationsEnabled=false, turns true once
+  //  persist middleware rehydrates from AsyncStorage on first render cycle).
+  const hasBootstrapped = useRef(false);
   useEffect(() => {
-    (async () => {
-      if (!notificationsEnabled) return;
+    console.log('[bootstrap] notificationsEnabled =', notificationsEnabled, '| alreadyRan =', hasBootstrapped.current);
+    if (!notificationsEnabled) return;
+    if (hasBootstrapped.current) return;
+    hasBootstrapped.current = true;
 
-      // Cancel the scheduled 8:30 PM reminder — user just opened the app
+    (async () => {
+      console.log('[bootstrap] body running...');
+      // Ensure Android channel exists (idempotent — safe to call every boot)
+      if (Platform.OS === 'android') {
+        await Notifications.setNotificationChannelAsync('quran-companion', {
+          name: 'Quran Companion',
+          importance: Notifications.AndroidImportance.HIGH,
+          sound: null,
+        });
+      }
+
+      // Cancel stale scheduled reminder — user is currently active
       await Notifications.cancelAllScheduledNotificationsAsync();
 
+      // TEMP TEST: fires 10s after app open to confirm notifications work
+      //await scheduleTestNotification();
+
+      const ctx = ctxRef.current;
       const type = await evaluateAndSendNotification(ctx);
       if (type) {
         setLastNotificationTime(Date.now());
@@ -56,13 +82,10 @@ function NotificationBootstrap() {
         }
       }
 
-      // Always re-schedule the 8:30 PM daily reminder after evaluation.
-      // This ensures the notification fires even if the user force-kills the app
-      // (swipe away from recents), because force-kill skips the AppState
-      // background event entirely — so we can't rely on that alone.
+      // Schedule 8:30 PM reminder so it fires even after force-kill
       await scheduleSmartDailyReminder(ctx, 20, 30);
     })();
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [notificationsEnabled]); // re-runs when store hydrates from AsyncStorage
 
   // ── AppState transitions ──────────────────────────────────────────────────
   useEffect(() => {
@@ -72,14 +95,15 @@ function NotificationBootstrap() {
       const comingToForeground =
         appState.current.match(/inactive|background/) && nextState === 'active';
 
+      const ctx = ctxRef.current; // always fresh
+
       if (wasActive && goingToBackground) {
-        // App going to background → schedule the 8:30 PM real notification
-        // so it fires even when the app is fully closed
+        // Going to background → (re)schedule 8:30 PM so it fires when closed
         await scheduleSmartDailyReminder(ctx, 20, 30);
       }
 
       if (comingToForeground) {
-        // App coming to foreground → user is now active, cancel scheduled reminder
+        // Coming to foreground → user is active; cancel scheduled reminder
         await Notifications.cancelAllScheduledNotificationsAsync();
 
         const type = await evaluateAndSendNotification(ctx);
@@ -96,14 +120,12 @@ function NotificationBootstrap() {
     });
 
     return () => sub.remove();
-  }, [lastActiveDate, streak, selectedMood, lastNotificationTime, comebackSentDate, notificationsEnabled]);
+  }, []); // ctxRef.current is always fresh — no deps needed
 
   // ── Handle tap on notification → navigate to Home ─────────────────────────
   useEffect(() => {
     const sub = Notifications.addNotificationResponseReceivedListener(() => {
       // Navigation to Home is handled by deep link data: { screen: 'Home' }
-      // AppNavigator will respond if deep linking is configured.
-      // For now the app simply opens to its current state.
     });
     return () => sub.remove();
   }, []);

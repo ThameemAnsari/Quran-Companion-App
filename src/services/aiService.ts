@@ -1,5 +1,5 @@
 import type { Mood, MoodOption, Ayah } from '../types';
-import { searchAyahs, fetchVersesByChapter, FALLBACK_AYAHS } from './quranApi';
+import { searchAyahs, probeTotalPages, fetchVersesByChapter, FALLBACK_AYAHS } from './quranApi';
 
 // ─── Mood definitions ────────────────────────────────────────────────────────
 
@@ -103,17 +103,28 @@ const MOOD_SURAHS: Record<string, number[]> = {
 
 // ─── AI service: mood → relevant ayahs ───────────────────────────────────────
 
-export async function getAyahsForMood(mood: Mood): Promise<Ayah[]> {
+export async function getAyahsForMood(mood: Mood, translationId = 85): Promise<Ayah[]> {
   const moodOption = MOOD_OPTIONS.find((m) => m.label === mood);
   if (!moodOption) return FALLBACK_AYAHS[mood] ?? [];
 
-  // Query ALL keywords on pages 1 and 2 for a larger initial pool
+  // Probe real total_pages cap before drawing pages so the shuffle deck
+  // is sized correctly from the very first selection.
+  if (!_pageDecks.has(mood)) {
+    const cap = await probeTotalPages(moodOption.keywords[0]);
+    setDeckCap(mood, cap);
+  }
+
+  // Draw 2 pages from the correctly-sized shuffle deck
+  const p1 = nextPage(mood);
+  const p2 = nextPage(mood);
+
   const seen = new Set<string>();
   const all: Ayah[] = [];
-  for (const page of [1, 2]) {
+  for (const page of [p1, p2]) {
     for (const query of moodOption.keywords) {
       try {
-        const results = await searchAyahs(query, moodOption.theme, 10, page);
+        const { ayahs: results, totalPages } = await searchAyahs(query, moodOption.theme, 10, page, translationId);
+        setDeckCap(mood, totalPages); // lock in real cap from API
         for (const a of results) {
           if (!seen.has(a.verseKey)) {
             seen.add(a.verseKey);
@@ -138,20 +149,56 @@ export async function getAyahsForMood(mood: Mood): Promise<Ayah[]> {
 //
 // Returns { ayahs, nextAttempt, exhausted } so the store always knows where to resume.
 
-const MAX_KEYWORD_PAGES = 15; // pages 3..17 per keyword (pages 1+2 already loaded upfront)
+const DEFAULT_PAGES = 20; // fallback cap before first API response
+
+// ─── Shuffle-bag page picker (dynamic cap from API pagination) ────────────────
+// Each mood gets its own shuffled deck sized to pagination.total_pages returned
+// by the API. Pages are dealt one at a time with no repeats; once the deck is
+// exhausted it reshuffles with the same cap so coverage cycles cleanly.
+const _pageDecks: Map<string, { deck: number[]; cap: number }> = new Map();
+
+function _buildDeck(cap: number): number[] {
+  const deck = Array.from({ length: cap }, (_, i) => i + 1);
+  for (let i = deck.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [deck[i], deck[j]] = [deck[j], deck[i]];
+  }
+  return deck;
+}
+
+/** Call after first API response to lock in the real page cap for this mood. */
+function setDeckCap(mood: string, cap: number): void {
+  const existing = _pageDecks.get(mood);
+  if (!existing || existing.cap !== cap) {
+    _pageDecks.set(mood, { deck: _buildDeck(cap), cap });
+  }
+}
+
+function nextPage(mood: string): number {
+  let entry = _pageDecks.get(mood);
+  if (!entry) {
+    entry = { deck: _buildDeck(DEFAULT_PAGES), cap: DEFAULT_PAGES };
+    _pageDecks.set(mood, entry);
+  }
+  if (entry.deck.length === 0) {
+    entry.deck = _buildDeck(entry.cap); // reshuffle after full cycle
+  }
+  return entry.deck.pop()!;
+}
 
 export async function fetchMoreAyahsForMood(
   mood: Mood,
   startAttempt: number,
   existingKeys: Set<string>,
+  translationId = 85,
 ): Promise<{ ayahs: Ayah[]; nextAttempt: number; exhausted: boolean }> {
   const moodOption = MOOD_OPTIONS.find((m) => m.label === mood);
   if (!moodOption) return { ayahs: [], nextAttempt: startAttempt, exhausted: true };
 
   const { keywords, theme } = moodOption;
   const surahs = MOOD_SURAHS[mood] ?? [];
-  // pages 3..17 per keyword (pages 1+2 pre-loaded at initial load)
-  const keywordAttempts = keywords.length * (MAX_KEYWORD_PAGES - 2);
+  const pageCap = _pageDecks.get(mood)?.cap ?? DEFAULT_PAGES;
+  const keywordAttempts = keywords.length * pageCap;
   const totalAttempts = keywordAttempts + surahs.length;
 
   let attempt = startAttempt;
@@ -159,17 +206,18 @@ export async function fetchMoreAyahsForMood(
     let results: Ayah[] = [];
 
     if (attempt < keywordAttempts) {
-      // Interleave keywords: attempt 0 → keywords[0] page 3, attempt 1 → keywords[1] page 3, ...
       const keywordIdx = attempt % keywords.length;
-      const page = Math.floor(attempt / keywords.length) + 3; // start from page 3
+      const page = nextPage(mood); // shuffle-bag: covers all pages before repeating
       try {
-        results = await searchAyahs(keywords[keywordIdx], theme, 10, page);
+        const { ayahs: fetched, totalPages } = await searchAyahs(keywords[keywordIdx], theme, 10, page, translationId);
+        setDeckCap(mood, totalPages);
+        results = fetched;
       } catch { /* skip */ }
     } else {
       // Surah-based fallback: fetch whole chapters relevant to the mood
       const surahAttempt = attempt - keywordAttempts;
       try {
-        results = await fetchVersesByChapter(surahs[surahAttempt], 20);
+        results = await fetchVersesByChapter(surahs[surahAttempt], 20, translationId);
       } catch { /* skip */ }
     }
 

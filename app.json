@@ -1,8 +1,8 @@
 {
   "expo": {
-    "name": "Quran Companion",
+    "name": "Qalbi",
     "slug": "quran-companion",
-    "version": "1.0.2",
+    "version": "1.1.0",
     "orientation": "portrait",
     "icon": "./assets/app_icon.png",
     "userInterfaceStyle": "light",
@@ -28,17 +28,30 @@
       "package": "com.qurancompanion.app",
       "permissions": [
         "android.permission.RECORD_AUDIO",
-        "android.permission.MODIFY_AUDIO_SETTINGS"
+        "android.permission.MODIFY_AUDIO_SETTINGS",
+        "android.permission.USE_EXACT_ALARM",
+        "android.permission.SCHEDULE_EXACT_ALARM",
+        "android.permission.RECEIVE_BOOT_COMPLETED"
       ]
     },
     "web": {
       "favicon": "./assets/app_icon.png"
     },
     "plugins": [
-      "expo-av"
+      "expo-audio",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/app_icon.png",
+          "color": "#4A7C59",
+          "androidMode": "default"
+        }
+      ]
     ],
     "extra": {
       "quranApiBase": "https://api.qurancdn.com/api/qdc/v4",
+      "quranClientId": "e7bf6ca0-8080-4238-a426-ba4472b5806d",
+      "quranClientSecret": "XltKYlz0_FCIK5VuKO2Ot3FkZG",
       "audioBase": "https://verses.quran.com",
       "eas": {
         "projectId": "9cc0ed0c-d16b-4612-ac70-fdf55c363cbc"

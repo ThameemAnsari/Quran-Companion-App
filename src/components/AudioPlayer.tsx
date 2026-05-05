@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -6,7 +6,7 @@ import {
   StyleSheet,
   Animated,
 } from 'react-native';
-import { Audio, AVPlaybackStatus } from 'expo-av';
+import { useAudioPlayer, useAudioPlayerStatus, setAudioModeAsync } from 'expo-audio';
 import { Ionicons } from '@expo/vector-icons';
 
 interface Props {
@@ -25,102 +25,50 @@ export const AudioPlayer: React.FC<Props> = ({
   audioUrl,
   reciterName = 'Mishary Alafasy',
 }) => {
-  const soundRef = useRef<Audio.Sound | null>(null);
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
-  const [position, setPosition] = useState(0);
-  const [duration, setDuration] = useState(0);
+  const player = useAudioPlayer({ uri: audioUrl });
+  const status = useAudioPlayerStatus(player);
   const progressAnim = useRef(new Animated.Value(0)).current;
   const [barWidth, setBarWidth] = useState(0);
 
-  // Unload sound when component unmounts or URL changes
+  const isPlaying = status.playing ?? false;
+  const isLoading = status.isBuffering ?? false;
+  const hasError = (status as any).error != null;
+  const position = (status.currentTime ?? 0) * 1000; // seconds → ms
+  const duration = (status.duration ?? 0) * 1000;    // seconds → ms
+
+  // Update progress bar animation
   useEffect(() => {
-    return () => {
-      soundRef.current?.unloadAsync();
-    };
+    if (duration > 0) {
+      progressAnim.setValue(position / duration);
+    }
+  }, [position, duration]);
+
+  // Set audio mode on mount
+  useEffect(() => {
+    setAudioModeAsync({
+      playsInSilentMode: true,
+      allowsRecording: false,
+      shouldPlayInBackground: false,
+      interruptionModeAndroid: 'duckOthers',
+    });
   }, []);
 
-  useEffect(() => {
-    // Unload previous sound when URL changes
-    const reset = async () => {
-      if (soundRef.current) {
-        await soundRef.current.unloadAsync();
-        soundRef.current = null;
+  const handlePlayPause = () => {
+    if (isPlaying) {
+      player.pause();
+    } else {
+      // If track finished, seek back to start then play
+      if (status.didJustFinish || (duration > 0 && position >= duration - 500)) {
+        player.seekTo(0);
       }
-      setIsPlaying(false);
-      setPosition(0);
-      setDuration(0);
-      progressAnim.setValue(0);
-    };
-    reset();
-  }, [audioUrl]);
-
-  const onPlaybackStatusUpdate = useCallback((status: AVPlaybackStatus) => {
-    if (!status.isLoaded) {
-      if ((status as any).error) {
-        console.warn('[AudioPlayer] Playback error:', (status as any).error);
-      }
-      return;
-    }
-    setIsPlaying(status.isPlaying);
-    setPosition(status.positionMillis);
-    if (status.durationMillis) {
-      setDuration(status.durationMillis);
-      const progress = status.positionMillis / status.durationMillis;
-      progressAnim.setValue(progress);
-    }
-    if (status.didJustFinish) {
-      setIsPlaying(false);
-      setPosition(0);
-      progressAnim.setValue(0);
-    }
-  }, [progressAnim]);
-
-  const handlePlayPause = async () => {
-    try {
-      await Audio.setAudioModeAsync({
-        allowsRecordingIOS: false,
-        playsInSilentModeIOS: true,
-        staysActiveInBackground: false,
-        shouldDuckAndroid: true,
-      });
-
-      if (!soundRef.current) {
-        setIsLoading(true);
-        // Load first (shouldPlay: false), then explicitly play — avoids iOS
-        // "file not found" error that occurs when shouldPlay:true races the load
-        const { sound, status } = await Audio.Sound.createAsync(
-          { uri: audioUrl },
-          { shouldPlay: false },
-          onPlaybackStatusUpdate
-        );
-        soundRef.current = sound;
-        setIsLoading(false);
-        if (status.isLoaded) {
-          await sound.playAsync();
-          setIsPlaying(true);
-        }
-      } else {
-        const status = await soundRef.current.getStatusAsync();
-        if (!status.isLoaded) return;
-        if (status.isPlaying) {
-          await soundRef.current.pauseAsync();
-        } else {
-          await soundRef.current.playAsync();
-        }
-      }
-    } catch (err: any) {
-      console.warn('[AudioPlayer] error:', err?.message ?? err);
-      setIsLoading(false);
-      setIsPlaying(false);
+      player.play();
     }
   };
 
-  const handleSeek = async (x: number) => {
-    if (!soundRef.current || !duration || !barWidth) return;
+  const handleSeek = (x: number) => {
+    if (!duration || !barWidth) return;
     const ratio = Math.max(0, Math.min(1, x / barWidth));
-    const seekTo = ratio * duration;
-    await soundRef.current.setPositionAsync(seekTo);
+    player.seekTo(ratio * (duration / 1000)); // seekTo takes seconds
   };
 
   const progressPercent = duration > 0 ? (position / duration) * 100 : 0;

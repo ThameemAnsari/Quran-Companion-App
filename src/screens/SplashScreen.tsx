@@ -11,12 +11,14 @@ import {
 import { LinearGradient } from 'expo-linear-gradient';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../types';
+import { useAppStore } from '../store/useAppStore';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Splash'>;
 
 export const SplashScreen: React.FC<Props> = ({ navigation }) => {
+  const hasSeenOnboarding = useAppStore((s) => s.hasSeenOnboarding);
   // ── Animation values ────────────────────────────────────────────────────────
   const ring1Opacity  = useRef(new Animated.Value(0)).current;
   const ring2Opacity  = useRef(new Animated.Value(0)).current;
@@ -77,9 +79,9 @@ export const SplashScreen: React.FC<Props> = ({ navigation }) => {
       pulseLoop.start();
     });
 
-    // Navigate to Home after 2.8 s
+    // Navigate after 2.8 s — show Onboarding on first launch, Home on subsequent
     const timer = setTimeout(() => {
-      navigation.replace('Home');
+      navigation.replace(hasSeenOnboarding ? 'Home' : 'Onboarding');
     }, 2800);
 
     return () => {
