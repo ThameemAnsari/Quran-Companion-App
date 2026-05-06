@@ -10,6 +10,7 @@ import {
   Linking,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAppStore } from '../store/useAppStore';
 import {
   requestNotificationPermission,
@@ -28,6 +29,7 @@ const BENEFITS = [
 ];
 
 export const NotificationPermissionModal: React.FC<Props> = ({ visible, onDismiss }) => {
+  const insets = useSafeAreaInsets();
   const {
     setPermissionScreenShown,
     setPermissionDeniedDate,
@@ -87,7 +89,7 @@ export const NotificationPermissionModal: React.FC<Props> = ({ visible, onDismis
       onRequestClose={handleLater}
     >
       <View style={styles.overlay}>
-        <View style={styles.sheet}>
+        <View style={[styles.sheet, { paddingBottom: Math.max(insets.bottom + 16, Platform.OS === 'ios' ? 44 : 28) }]}>
           {/* Icon */}
           <View style={styles.iconWrap}>
             <Text style={styles.iconEmoji}>🔔</Text>
@@ -149,7 +151,6 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 28,
     paddingHorizontal: 24,
     paddingTop: 32,
-    paddingBottom: Platform.OS === 'ios' ? 44 : 28,
     alignItems: 'center',
   },
   iconWrap: {

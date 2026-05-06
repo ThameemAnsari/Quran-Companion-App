@@ -28,6 +28,83 @@ type Props = CompositeScreenProps<
   NativeStackScreenProps<RootStackParamList>
 >;
 
+// Animated shimmer chip — mimics the shape of a real word chip while loading
+function WbwSkeletonChip() {
+  const shimmer = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    const anim = Animated.loop(
+      Animated.sequence([
+        Animated.timing(shimmer, { toValue: 1, duration: 700, useNativeDriver: true }),
+        Animated.timing(shimmer, { toValue: 0, duration: 700, useNativeDriver: true }),
+      ])
+    );
+    anim.start();
+    return () => anim.stop();
+  }, []);
+
+  const opacity = shimmer.interpolate({ inputRange: [0, 1], outputRange: [0.45, 1] });
+
+  return (
+    <Animated.View style={[skeletonStyles.chip, { opacity }]}>
+      {/* Position badge stub */}
+      <View style={skeletonStyles.badge} />
+      {/* Arabic block */}
+      <View style={skeletonStyles.arabic} />
+      {/* Divider */}
+      <View style={skeletonStyles.divider} />
+      {/* Transliteration line */}
+      <View style={skeletonStyles.line} />
+      {/* Meaning line — shorter */}
+      <View style={[skeletonStyles.line, { width: 36 }]} />
+    </Animated.View>
+  );
+}
+
+const skeletonStyles = StyleSheet.create({
+  chip: {
+    alignItems: 'center',
+    backgroundColor: '#F0FDF4',
+    borderRadius: 14,
+    paddingHorizontal: 12,
+    paddingTop: 20,
+    paddingBottom: 12,
+    minWidth: 72,
+    borderWidth: 1,
+    borderColor: '#D1FAE5',
+    borderTopWidth: 3,
+    borderTopColor: '#A7F3D0',
+    gap: 6,
+  },
+  badge: {
+    position: 'absolute',
+    top: -1,
+    right: 6,
+    width: 16,
+    height: 12,
+    borderBottomLeftRadius: 6,
+    borderBottomRightRadius: 6,
+    backgroundColor: '#A7F3D0',
+  },
+  arabic: {
+    width: 40,
+    height: 24,
+    borderRadius: 6,
+    backgroundColor: '#BBF7D0',
+  },
+  divider: {
+    width: '80%',
+    height: 1,
+    backgroundColor: '#D1FAE5',
+  },
+  line: {
+    width: 48,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#D1FAE5',
+  },
+});
+
 export const AyahScreen: React.FC<Props> = ({ navigation }) => {
   const { currentAyah, nextAyah, addBookmark, removeBookmark, isBookmarked, incrementAyahsRead, addTimeSpent,
     permissionScreenShown, notificationsEnabled, weekStats, permissionDeniedDate, selectedMood } =
@@ -35,7 +112,7 @@ export const AyahScreen: React.FC<Props> = ({ navigation }) => {
   const [showExplanation, setShowExplanation] = useState(false);
   const [wordByWord, setWordByWord] = useState<WordData[]>([]);
   const [wbwLoading, setWbwLoading] = useState(false);
-  const [playingPos, setPlayingPos] = useState<number | null>(null);
+  const [playingWord, setPlayingWord] = useState<{ pos: number; url: string } | null>(null);
   const wordPlayer = useAudioPlayer(null);
   const wordStatus = useAudioPlayerStatus(wordPlayer);
   const [showPermissionModal, setShowPermissionModal] = useState(false);
@@ -45,7 +122,6 @@ export const AyahScreen: React.FC<Props> = ({ navigation }) => {
   const slideAnim = useRef(new Animated.Value(20)).current;
   const scrollRef = useRef<ScrollView>(null);
   const sessionStartRef = useRef<number>(Date.now());
-  const permTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const bookmarked = currentAyah ? isBookmarked(currentAyah.verseKey) : false;
 
@@ -80,49 +156,35 @@ export const AyahScreen: React.FC<Props> = ({ navigation }) => {
     setShowExplanation(false);
     setWordByWord([]);
     setWbwLoading(false);
-    setPlayingPos(null);
+    setPlayingWord(null);
     wordPlayer.pause();
   }, [currentAyah?.verseKey]);
 
   // Auto-reset highlight when word audio finishes
   useEffect(() => {
-    if (wordStatus.didJustFinish) setPlayingPos(null);
+    if (wordStatus.didJustFinish) setPlayingWord(null);
   }, [wordStatus.didJustFinish]);
 
-  // Drive audio from state — avoids stale-closure race conditions
+  // Drive audio from state — URL is stored directly in state, no stale-closure lookup
   useEffect(() => {
-    if (playingPos === null) {
+    if (!playingWord) {
       wordPlayer.pause();
       return;
     }
-    const word = wordByWord.find((w) => w.position === playingPos);
-    if (word?.audioUrl) {
-      wordPlayer.replace({ uri: word.audioUrl });
-      wordPlayer.play();
-    }
-  }, [playingPos]);
+    wordPlayer.replace({ uri: playingWord.url });
+    wordPlayer.play();
+  }, [playingWord]);
 
-  // Show pre-permission screen after user sees first ayah (~5s in).
-  // Re-show after 2 days if user previously tapped "Maybe Later".
-  useEffect(() => {
-    if (notificationsEnabled) return;
-    if (!currentAyah) return;
-
-    if (permissionScreenShown) {
-      // Re-ask only if user tapped "Maybe Later" and 2+ days have passed
-      if (!permissionDeniedDate) return;
-      const daysPassed =
-        (Date.now() - new Date(permissionDeniedDate).getTime()) / (1000 * 60 * 60 * 24);
-      if (daysPassed < 2) return;
-    }
-
-    permTimerRef.current = setTimeout(() => {
-      setShowPermissionModal(true);
-    }, 5_000);
-    return () => {
-      if (permTimerRef.current) clearTimeout(permTimerRef.current);
-    };
-  }, [currentAyah?.verseKey]);
+  // Helper: check whether the permission modal should be shown
+  function shouldShowPermissionModal() {
+    if (notificationsEnabled) return false;
+    if (!permissionScreenShown) return true;
+    // Re-ask only if user tapped "Maybe Later" and 2+ days have passed
+    if (!permissionDeniedDate) return false;
+    const daysPassed =
+      (Date.now() - new Date(permissionDeniedDate).getTime()) / (1000 * 60 * 60 * 24);
+    return daysPassed >= 2;
+  }
 
   if (!currentAyah) {
     return (
@@ -293,14 +355,14 @@ export const AyahScreen: React.FC<Props> = ({ navigation }) => {
               <View style={styles.wbwDivider} />
               {wbwLoading ? (
                 <View style={styles.wbwLoadingRow}>
-                  {[1, 2, 3, 4].map((i) => (
-                    <View key={i} style={styles.wbwSkeleton} />
+                  {[1, 2, 3, 4, 5, 6].map((i) => (
+                    <WbwSkeletonChip key={i} />
                   ))}
                 </View>
               ) : (
                 <View style={styles.wbwContainer}>
                   {wordByWord.map((w) => {
-                    const isPlaying = playingPos === w.position;
+                    const isPlaying = playingWord?.pos === w.position;
                     return (
                       <TouchableOpacity
                         key={w.position}
@@ -308,7 +370,7 @@ export const AyahScreen: React.FC<Props> = ({ navigation }) => {
                         activeOpacity={0.75}
                         onPress={() => {
                           if (!w.audioUrl) return;
-                          setPlayingPos(isPlaying ? null : w.position);
+                          setPlayingWord(isPlaying ? null : { pos: w.position, url: w.audioUrl });
                         }}
                       >
                         <View style={styles.wbwPosBadge}>
@@ -373,7 +435,7 @@ export const AyahScreen: React.FC<Props> = ({ navigation }) => {
               <Text style={styles.actionLabel}>Add to Playlist</Text>
             </TouchableOpacity>
 
-            <TouchableOpacity style={[styles.nextBtn, styles.actionBtnFlex]} onPress={() => { scrollRef.current?.scrollTo({ y: 0, animated: false }); nextAyah(); }}>
+            <TouchableOpacity style={[styles.nextBtn, styles.actionBtnFlex]} onPress={() => { scrollRef.current?.scrollTo({ y: 0, animated: false }); nextAyah(); if (shouldShowPermissionModal()) setShowPermissionModal(true); }}>
               <Text style={styles.nextBtnText}>Next Ayah</Text>
               <Ionicons name="arrow-forward" size={18} color="#fff" />
             </TouchableOpacity>
@@ -694,18 +756,10 @@ const styles = StyleSheet.create({
     maxWidth: 80,
   },
   wbwLoadingRow: {
-    flexDirection: 'row',
+    flexDirection: 'row-reverse',
     gap: 10,
     padding: 16,
     flexWrap: 'wrap',
-  },
-  wbwSkeleton: {
-    width: 68,
-    height: 90,
-    borderRadius: 14,
-    backgroundColor: '#F0FDF4',
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
   },
   actions: {
     flexDirection: 'column',

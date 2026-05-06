@@ -4,7 +4,8 @@ import {
   Text,
   TouchableOpacity,
   StyleSheet,
-  Animated,
+  PanResponder,
+  type GestureResponderEvent,
 } from 'react-native';
 import { useAudioPlayer, useAudioPlayerStatus, setAudioModeAsync } from 'expo-audio';
 import { Ionicons } from '@expo/vector-icons';
@@ -27,8 +28,12 @@ export const AudioPlayer: React.FC<Props> = ({
 }) => {
   const player = useAudioPlayer({ uri: audioUrl });
   const status = useAudioPlayerStatus(player);
-  const progressAnim = useRef(new Animated.Value(0)).current;
-  const [barWidth, setBarWidth] = useState(0);
+  const barRef = useRef<View>(null);
+  // Absolute screen position + width of the bar, populated on layout
+  const barLayoutRef = useRef<{ pageX: number; width: number }>({ pageX: 0, width: 0 });
+  const durationRef = useRef(0);
+  // While the user is dragging, show drag position immediately; null = not dragging
+  const [dragRatio, setDragRatio] = useState<number | null>(null);
 
   const isPlaying = status.playing ?? false;
   const isLoading = status.isBuffering ?? false;
@@ -36,12 +41,10 @@ export const AudioPlayer: React.FC<Props> = ({
   const position = (status.currentTime ?? 0) * 1000; // seconds → ms
   const duration = (status.duration ?? 0) * 1000;    // seconds → ms
 
-  // Update progress bar animation
+  // Keep durationRef in sync so PanResponder callbacks always have the latest value
   useEffect(() => {
-    if (duration > 0) {
-      progressAnim.setValue(position / duration);
-    }
-  }, [position, duration]);
+    durationRef.current = duration;
+  }, [duration]);
 
   // Set audio mode on mount
   useEffect(() => {
@@ -53,32 +56,63 @@ export const AudioPlayer: React.FC<Props> = ({
     });
   }, []);
 
-  const handlePlayPause = () => {
-    if (isPlaying) {
-      player.pause();
-    } else {
-      // If track finished, seek back to start then play
-      if (status.didJustFinish || (duration > 0 && position >= duration - 500)) {
-        player.seekTo(0);
-      }
-      player.play();
-    }
+  const clamp = (v: number) => Math.max(0, Math.min(1, v));
+
+  // Convert an absolute pageX touch coordinate to a 0-1 ratio along the bar
+  const pageXToRatio = (pageX: number) => {
+    const { pageX: barLeft, width } = barLayoutRef.current;
+    if (!width) return 0;
+    return clamp((pageX - barLeft) / width);
   };
 
-  const handleSeek = (x: number) => {
-    if (!duration || !barWidth) return;
-    const ratio = Math.max(0, Math.min(1, x / barWidth));
-    player.seekTo(ratio * (duration / 1000)); // seekTo takes seconds
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: () => true,
+      onPanResponderGrant: (e) => {
+        setDragRatio(pageXToRatio(e.nativeEvent.pageX));
+      },
+      onPanResponderMove: (e) => {
+        setDragRatio(pageXToRatio(e.nativeEvent.pageX));
+      },
+      onPanResponderRelease: (e) => {
+        const ratio = pageXToRatio(e.nativeEvent.pageX);
+        const dur = durationRef.current;
+        if (dur > 0) player.seekTo((ratio * dur) / 1000);
+        setDragRatio(null);
+      },
+      onPanResponderTerminate: () => {
+        setDragRatio(null);
+      },
+    })
+  ).current;
+
+  // Re-measure bar absolute position whenever layout changes (scroll, orientation, etc.)
+  const measureBar = () => {
+    barRef.current?.measure((_x, _y, width, _height, pageX) => {
+      barLayoutRef.current = { pageX, width };
+    });
   };
 
-  const progressPercent = duration > 0 ? (position / duration) * 100 : 0;
+  // Display ratio: use drag position while scrubbing, otherwise real position
+  const displayRatio = dragRatio !== null ? dragRatio : duration > 0 ? position / duration : 0;
+  const progressPercent = displayRatio * 100;
 
   return (
     <View style={styles.container}>
       {/* Play / Pause button */}
       <TouchableOpacity
         style={styles.playButton}
-        onPress={handlePlayPause}
+        onPress={() => {
+          if (isPlaying) {
+            player.pause();
+          } else {
+            if (status.didJustFinish || (duration > 0 && position >= duration - 500)) {
+              player.seekTo(0);
+            }
+            player.play();
+          }
+        }}
         disabled={isLoading}
         activeOpacity={0.8}
       >
@@ -101,11 +135,11 @@ export const AudioPlayer: React.FC<Props> = ({
           <Text style={styles.timeText}>{formatTime(duration)}</Text>
         </View>
 
-        {/* Progress bar */}
-        <TouchableOpacity
-          activeOpacity={1}
-          onLayout={(e) => setBarWidth(e.nativeEvent.layout.width)}
-          onPress={(e) => handleSeek(e.nativeEvent.locationX)}
+        {/* Progress bar — supports drag scrubbing */}
+        <View
+          ref={barRef}
+          {...panResponder.panHandlers}
+          onLayout={measureBar}
           style={styles.progressTrack}
         >
           <View style={styles.progressBg} />
@@ -113,10 +147,11 @@ export const AudioPlayer: React.FC<Props> = ({
           <View
             style={[
               styles.progressThumb,
+              dragRatio !== null && styles.progressThumbActive,
               { left: `${progressPercent}%` },
             ]}
           />
-        </TouchableOpacity>
+        </View>
 
         {/* Reciter name */}
         <Text style={styles.reciterName}>{reciterName} ▼</Text>
@@ -189,6 +224,19 @@ const styles = StyleSheet.create({
     top: '50%',
     marginTop: -6,
     marginLeft: -6,
+  },
+  progressThumbActive: {
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    marginTop: -8,
+    marginLeft: -8,
+    backgroundColor: '#1B5E20',
+    shadowColor: '#2E7D32',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.4,
+    shadowRadius: 4,
+    elevation: 4,
   },
   reciterName: {
     fontSize: 12,
