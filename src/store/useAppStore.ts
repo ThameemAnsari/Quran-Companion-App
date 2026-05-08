@@ -71,6 +71,7 @@ interface AppState {
   incrementAyahsRead: () => void;
   addTimeSpent: (minutes: number) => void;
   checkAndUpdateStreak: () => void;
+  setStreak: (days: number) => void;
   getDayStats: (dateStr: string) => WeekStats;
 
   // ── notification actions
@@ -288,6 +289,8 @@ export const useAppStore = create<AppState>()(
 
         set({ streak: newStreak, lastActiveDate: today });
       },
+
+      setStreak: (days) => set({ streak: days }),
 
       getDayStats: (dateStr: string) => {
         const { dailyStats } = get();

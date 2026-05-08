@@ -93,6 +93,11 @@ A beautifully designed React Native (Expo) app that helps users build a consiste
 - App icon displayed as avatar
 - Personal stats: Streak, Bookmarks, Reflections, Time Spent
 - Settings rows: Daily Reminders, Translation Language (static display), Reciter, Share App, About
+- **Sync Streak with Quran.com** — connect your Quran.com account via OAuth2 to keep streaks in sync across devices
+  - Sign in via Quran Foundation browser login
+  - Streak is synced bidirectionally: the highest of local vs Quran.com is always preserved
+  - Reading activity is reported automatically each day (first ayah read triggers a background POST)
+  - Tap the sync card to refresh; long-press to disconnect
 
 ### 🎬 Onboarding (5 slides)
 1. **Mood-Based Discovery** — select your feeling, get a matching Ayah
@@ -123,6 +128,9 @@ A beautifully designed React Native (Expo) app that helps users build a consiste
 | expo-audio | ~0.4.x | Audio playback (verse + word-by-word) |
 | expo-notifications | ~0.29.x | Push / local notifications |
 | expo-device | ~7.x | Device detection |
+| expo-auth-session | ~6.x | OAuth2 PKCE flow (Quran.com login) |
+| expo-web-browser | ~14.x | In-app browser for OAuth2 |
+| expo-secure-store | ~14.x | Secure token persistence |
 | NativeWind | 4.x | Tailwind-style utility classes |
 | axios | 1.x | HTTP client |
 | @expo/vector-icons | 14.x | Ionicons icon set |
@@ -196,7 +204,8 @@ src/
 ├── services/
 │   ├── aiService.ts               # Explanation generation (on-device pool)
 │   ├── notificationService.ts     # Smart notification engine (priority-based, lifecycle-aware)
-│   └── quranApi.ts                # Quran.com API + word-by-word + tafsir + audio
+│   ├── quranApi.ts                # Quran.com API + word-by-word + tafsir + audio
+│   └── quranAuth.ts               # Quran Foundation OAuth2 (User API) — streak sync + activity reporting
 ├── store/
 │   └── useAppStore.ts             # Zustand global store
 └── types/
@@ -218,9 +227,14 @@ eas.json                           # EAS Build profiles (preview APK / productio
 | [audio.qurancdn.com](https://audio.qurancdn.com) | None | Word-by-word pronunciation audio |
 | [apis.quran.foundation/content](https://apis.quran.foundation/content/api/v4) | OAuth2 (client credentials, `content` scope) | Tafsir (Ibn Kathir + language-native) |
 | [apis.quran.foundation/search](https://apis.quran.foundation/search/v1) | OAuth2 (client credentials, `search` scope) | Mood-based ayah search |
+| [apis-prelive.quran.foundation/auth/v1](https://apis-prelive.quran.foundation/auth/v1) | OAuth2 PKCE (User API, `streak` scope) | Streak sync + reading activity reporting |
 
-> **OAuth2 credentials** are stored in `app.json` under `expo.extra` (`quranClientId`, `quranClientSecret`).  
-> Tokens are fetched automatically using the **client credentials flow**, cached in memory, and proactively renewed 60 seconds before expiry — no manual token management needed.
+> **Content & Search API credentials** are stored in `app.json` under `expo.extra` (`quranClientId`, `quranClientSecret`).  
+> Tokens are fetched automatically using the **client credentials flow**, cached in memory, and proactively renewed 60 seconds before expiry.
+
+> **User API credentials** use the **OAuth2 PKCE flow** — the user signs in with their Quran.com account in a browser. The access token is stored securely on-device via `expo-secure-store` and used to:
+> - Report daily reading activity (`POST /v1/activity-days`) — fires once per calendar day, on the first ayah read
+> - Fetch the remote streak (`GET /v1/streaks/current-streak-days`) — synced bidirectionally with the local store
 
 ---
 

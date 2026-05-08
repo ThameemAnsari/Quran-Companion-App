@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -16,7 +16,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
-import { useAuthRequest } from 'expo-auth-session';
+import { useAuthRequest, makeRedirectUri } from 'expo-auth-session';
 import { useAppStore } from '../store/useAppStore';
 import {
   requestNotificationPermission,
@@ -35,18 +35,26 @@ import {
 } from '../services/quranAuth';
 
 export const ProfileScreen: React.FC = () => {
-  const { streak, weekStats, bookmarks, reflections, notificationsEnabled, setNotificationsEnabled, dailyStats, selectedTranslationName } = useAppStore();
+  const { streak, weekStats, bookmarks, reflections, notificationsEnabled, setNotificationsEnabled, dailyStats, selectedTranslationName, setStreak } = useAppStore();
 
   // ── Quran.com sync state ──────────────────────────────────────────────────
   const [qfStreak, setQfStreak] = useState<number | null>(null);
   const [syncStatus, setSyncStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
   const [isConnected, setIsConnected] = useState(false);
+  // Guard: track which auth code we've already exchanged to prevent double-fire
+  const processedCodeRef = useRef<string | null>(null);
+
+  // makeRedirectUri with native ensures the exact registered URI is used
+  // on a native build regardless of environment
+  // qurancompanion://oauth/callback
+  // com.qurancompanion.app://oauth/callback
+  const redirectUri = makeRedirectUri({ native: 'qurancompanion://oauth/callback' });
 
   const [request, response, promptAsync] = useAuthRequest(
     {
       clientId: QF_CLIENT_ID,
       scopes: ['openid', 'streak', 'offline_access'],
-      redirectUri: QF_REDIRECT_URI,
+      redirectUri,
       usePKCE: true,
     },
     QF_DISCOVERY,
@@ -58,19 +66,28 @@ export const ProfileScreen: React.FC = () => {
       if (!token) return;
       setIsConnected(true);
       const days = await fetchQuranComStreakDays(token);
-      if (days !== null) { setQfStreak(days); setSyncStatus('success'); }
+      if (days !== null) {
+        setQfStreak(days);
+        setSyncStatus('success');
+        const best = Math.max(streak, days);
+        if (best !== streak) setStreak(best);
+      }
     });
   }, []);
 
   // Handle OAuth2 response
   useEffect(() => {
     if (!response) return;
+    console.log('[QF Auth] response =', JSON.stringify(response));
     if (response.type === 'error') {
       setSyncStatus('error');
       Alert.alert('Sign-in failed', response.error?.message ?? 'Unknown error');
       return;
     }
     if (response.type !== 'success' || !request?.codeVerifier) return;
+    // Prevent exchanging the same code twice (React re-render / Strict Mode)
+    if (processedCodeRef.current === response.params.code) return;
+    processedCodeRef.current = response.params.code;
 
     (async () => {
       setSyncStatus('loading');
@@ -78,10 +95,15 @@ export const ProfileScreen: React.FC = () => {
         const token = await exchangeCodeForToken(
           response.params.code,
           request.codeVerifier!,
+          redirectUri,
         );
         setIsConnected(true);
         const days = await fetchQuranComStreakDays(token);
-        if (days !== null) { setQfStreak(days); }
+        if (days !== null) {
+          setQfStreak(days);
+          const best = Math.max(streak, days);
+          if (best !== streak) setStreak(best);
+        }
         setSyncStatus('success');
       } catch (e: any) {
         setSyncStatus('error');
@@ -97,12 +119,30 @@ export const ProfileScreen: React.FC = () => {
       const token = await getSavedAccessToken();
       if (!token) { setIsConnected(false); setSyncStatus('idle'); return; }
       const days = await fetchQuranComStreakDays(token);
-      if (days !== null) { setQfStreak(days); setSyncStatus('success'); }
-      else { setSyncStatus('error'); }
+      if (days !== null) {
+        setQfStreak(days);
+        setSyncStatus('success');
+        const best = Math.max(streak, days);
+        if (best !== streak) setStreak(best);
+      } else { setSyncStatus('error'); }
       return;
     }
+    console.log('[QF Auth] redirectUri =', redirectUri);
+    console.log('[QF Auth] clientId =', QF_CLIENT_ID);
+    console.log('[QF Auth] discovery =', JSON.stringify(QF_DISCOVERY));
+    console.log('[QF Auth] request ready =', !!request);
     setSyncStatus('loading');
-    promptAsync();
+    try {
+      const result = await promptAsync();
+      console.log('[QF Auth] promptAsync result =', JSON.stringify(result));
+      if (result.type !== 'success') {
+        setSyncStatus('idle');
+      }
+    } catch (e: any) {
+      console.log('[QF Auth] promptAsync ERROR =', e?.message, e?.stack);
+      setSyncStatus('error');
+      Alert.alert('Browser error', e?.message ?? 'Could not open login page');
+    }
   }
 
   async function handleDisconnect() {
@@ -255,7 +295,7 @@ export const ProfileScreen: React.FC = () => {
               {syncStatus === 'loading'
                 ? 'Connecting…'
                 : isConnected && qfStreak !== null
-                ? `Quran.com streak: ${qfStreak} day${qfStreak !== 1 ? 's' : ''} 🔥  •  Hold to disconnect`
+                ? (() => { const s = Math.max(streak, qfStreak); return `Quran.com streak: ${s} day${s !== 1 ? 's' : ''} 🔥  •  Hold to disconnect`; })()
                 : isConnected
                 ? 'Tap to refresh  •  Hold to disconnect'
                 : 'Sign in with your Quran.com account'}
