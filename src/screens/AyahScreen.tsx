@@ -165,14 +165,11 @@ export const AyahScreen: React.FC<Props> = ({ navigation }) => {
     if (wordStatus.didJustFinish) setPlayingWord(null);
   }, [wordStatus.didJustFinish]);
 
-  // Drive audio from state — URL is stored directly in state, no stale-closure lookup
+  // Pause when playingWord is cleared from outside (ayah change, auto-reset on finish)
   useEffect(() => {
     if (!playingWord) {
       wordPlayer.pause();
-      return;
     }
-    wordPlayer.replace({ uri: playingWord.url });
-    wordPlayer.play();
   }, [playingWord]);
 
   // Helper: check whether the permission modal should be shown
@@ -370,7 +367,14 @@ export const AyahScreen: React.FC<Props> = ({ navigation }) => {
                         activeOpacity={0.75}
                         onPress={() => {
                           if (!w.audioUrl) return;
-                          setPlayingWord(isPlaying ? null : { pos: w.position, url: w.audioUrl });
+                          if (isPlaying) {
+                            setPlayingWord(null);
+                            wordPlayer.pause();
+                          } else {
+                            setPlayingWord({ pos: w.position, url: w.audioUrl });
+                            wordPlayer.replace({ uri: w.audioUrl });
+                            wordPlayer.play();
+                          }
                         }}
                       >
                         <View style={styles.wbwPosBadge}>

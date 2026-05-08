@@ -10,6 +10,7 @@ import {
   ScrollView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { Ayah } from '../types';
 import { useAppStore } from '../store/useAppStore';
 import { MOOD_OPTIONS } from '../services/aiService';
@@ -28,6 +29,7 @@ export const AddToCollectionSheet: React.FC<Props> = ({
   onCreateNew,
 }) => {
   const { collections, addAyahToCollection, createCollection, selectedMood } = useAppStore();
+  const insets = useSafeAreaInsets();
   const slideAnim = useRef(new Animated.Value(300)).current;
   const backdropAnim = useRef(new Animated.Value(0)).current;
 
@@ -121,7 +123,7 @@ export const AddToCollectionSheet: React.FC<Props> = ({
 
       {/* Sheet */}
       <Animated.View
-        style={[styles.sheet, { transform: [{ translateY: slideAnim }] }]}
+        style={[styles.sheet, { transform: [{ translateY: slideAnim }], paddingBottom: Math.max(24, insets.bottom + 12) }]}
       >
         {/* Handle */}
         <View style={styles.handle} />
@@ -286,7 +288,7 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 24,
     paddingHorizontal: 20,
     paddingTop: 12,
-    paddingBottom: 36,
+    paddingBottom: 24,
     maxHeight: '85%',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: -4 },

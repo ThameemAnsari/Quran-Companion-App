@@ -158,7 +158,7 @@ function isNightWindow(): boolean {
  * Returns true if granted.
  */
 export async function requestNotificationPermission(): Promise<boolean> {
-  console.log('[notif] requestNotificationPermission: isDevice =', Device.isDevice, '| OS =', Platform.OS);
+  //console.log('[notif] requestNotificationPermission: isDevice =', Device.isDevice, '| OS =', Platform.OS);
 
   if (Platform.OS === 'android') {
     await Notifications.setNotificationChannelAsync('quran-companion', {
@@ -169,7 +169,7 @@ export async function requestNotificationPermission(): Promise<boolean> {
   }
 
   const { status: existing } = await Notifications.getPermissionsAsync();
-  console.log('[notif] existing permission status:', existing);
+  //console.log('[notif] existing permission status:', existing);
   if (existing === 'granted') {
     // On Android 12+ (API 31+) also request exact alarm permission so
     // notifications fire on time from killed/background state.
@@ -187,7 +187,7 @@ export async function requestNotificationPermission(): Promise<boolean> {
       : {};
 
   const { status } = await Notifications.requestPermissionsAsync(requestOptions);
-  console.log('[notif] after request, status:', status);
+  //console.log('[notif] after request, status:', status);
   return status === 'granted';
 }
 
@@ -404,5 +404,5 @@ export async function scheduleTestNotification(): Promise<void> {
       repeats: false,
     },
   });
-  console.log('[notif] Test notification scheduled — fire in 15s');
+  //console.log('[notif] Test notification scheduled — fire in 15s');
 }

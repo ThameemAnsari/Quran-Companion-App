@@ -317,7 +317,7 @@ export async function searchAyahs(
     const clientId = Constants.expoConfig?.extra?.quranClientId as string;
     const token    = await getSearchToken();
 
-    console.log('[quranApi] searchAyahs query:', query, 'page:', page);
+   // console.log('[quranApi] searchAyahs query:', query, 'page:', page);
 
     const res = await axios.get(QF_SEARCH_URL, {
       params: {
@@ -338,8 +338,8 @@ export async function searchAyahs(
       timeout: 15_000,
     });
 
-    console.log('[quranApi] response pagination:', JSON.stringify(res.data?.pagination));
-    console.log('[quranApi] response verses:', JSON.stringify(res.data?.result));
+    //console.log('[quranApi] response pagination:', JSON.stringify(res.data?.pagination));
+    //console.log('[quranApi] response verses:', JSON.stringify(res.data?.result));
 
     const verses: Array<{
       key: string;
@@ -534,7 +534,7 @@ export async function fetchWordByWord(verseKey: string): Promise<WordData[]> {
     });
     const words: any[] = res.data?.verse?.words ?? [];
     return words
-      .filter((w: any) => w.char_type_name !== 'end')   // skip verse-end symbols
+      .filter((w: any) => w.char_type_name === 'word')   // only actual word tokens — excludes end markers, sajdah signs, hizb markers, etc.
       .map((w: any, i: number) => ({
         position: i + 1,
         arabic: w.text_uthmani ?? '',

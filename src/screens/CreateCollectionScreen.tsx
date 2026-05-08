@@ -11,7 +11,7 @@ import {
   Alert,
   ScrollView,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../types';
@@ -29,6 +29,7 @@ export const CreateCollectionScreen: React.FC<Props> = ({ navigation, route }) =
   const { createCollection, addAyahToCollection } = useAppStore();
   const [name, setName] = useState('');
   const [selectedEmoji, setSelectedEmoji] = useState('📖');
+  const insets = useSafeAreaInsets();
 
   const handleCreate = () => {
     const trimmed = name.trim();
@@ -44,12 +45,12 @@ export const CreateCollectionScreen: React.FC<Props> = ({ navigation, route }) =
   };
 
   return (
-    <SafeAreaView style={styles.safe}>
-      <StatusBar barStyle="dark-content" backgroundColor="#F5F7F2" />
-      <KeyboardAvoidingView
-        style={{ flex: 1 }}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      >
+    <KeyboardAvoidingView
+      style={{ flex: 1 }}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+    >
+      <SafeAreaView style={styles.safe} edges={['top']}>
+        <StatusBar barStyle="dark-content" backgroundColor="#F5F7F2" />
         {/* Header */}
         <View style={styles.header}>
           <TouchableOpacity
@@ -59,11 +60,17 @@ export const CreateCollectionScreen: React.FC<Props> = ({ navigation, route }) =
             <Ionicons name="close" size={24} color="#1B1B1B" />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>New Collection</Text>
-          <View style={{ width: 24 }} />
+          <TouchableOpacity
+            style={[styles.headerCreate, !name.trim() && styles.headerCreateDisabled]}
+            onPress={handleCreate}
+            activeOpacity={0.85}
+          >
+            <Text style={styles.headerCreateText}>Create</Text>
+          </TouchableOpacity>
         </View>
 
         <ScrollView
-          contentContainerStyle={styles.content}
+          contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 24 }]}
           keyboardShouldPersistTaps="handled"
         >
           {/* Preview */}
@@ -118,18 +125,10 @@ export const CreateCollectionScreen: React.FC<Props> = ({ navigation, route }) =
             </View>
           )}
 
-          {/* Create button */}
-          <TouchableOpacity
-            style={[styles.createBtn, !name.trim() && styles.createBtnDisabled]}
-            onPress={handleCreate}
-            activeOpacity={0.85}
-          >
-            <Ionicons name="add-circle-outline" size={20} color="#fff" />
-            <Text style={styles.createBtnText}>Create Collection</Text>
-          </TouchableOpacity>
+
         </ScrollView>
-      </KeyboardAvoidingView>
-    </SafeAreaView>
+      </SafeAreaView>
+    </KeyboardAvoidingView>
   );
 };
 
@@ -149,7 +148,7 @@ const styles = StyleSheet.create({
   },
   content: {
     paddingHorizontal: 20,
-    paddingBottom: 40,
+    paddingBottom: 40, // baseline; overridden inline with insets.bottom
     gap: 24,
   },
   preview: {
@@ -246,5 +245,19 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     fontWeight: '700',
+  },
+  headerCreate: {
+    backgroundColor: '#2E7D32',
+    borderRadius: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+  },
+  headerCreateDisabled: {
+    opacity: 0.5,
+  },
+  headerCreateText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#fff',
   },
 });

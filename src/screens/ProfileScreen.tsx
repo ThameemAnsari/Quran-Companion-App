@@ -69,7 +69,7 @@ export const ProfileScreen: React.FC = () => {
 
   async function handleShare() {
     const scheduled = await Notifications.getAllScheduledNotificationsAsync();
-    console.log('[notif] Scheduled notifications:', JSON.stringify(scheduled, null, 2));
+    //console.log('[notif] Scheduled notifications:', JSON.stringify(scheduled, null, 2));
     await Share.share({
       message:
         '📖 I\'ve been using Quran Companion to reflect on ayahs that match my mood. It\'s a beautiful way to connect with the Quran daily. Try it out!',

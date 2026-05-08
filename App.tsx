@@ -50,13 +50,13 @@ function NotificationBootstrap() {
   //  persist middleware rehydrates from AsyncStorage on first render cycle).
   const hasBootstrapped = useRef(false);
   useEffect(() => {
-    console.log('[bootstrap] notificationsEnabled =', notificationsEnabled, '| alreadyRan =', hasBootstrapped.current);
+    //console.log('[bootstrap] notificationsEnabled =', notificationsEnabled, '| alreadyRan =', hasBootstrapped.current);
     if (!notificationsEnabled) return;
     if (hasBootstrapped.current) return;
     hasBootstrapped.current = true;
 
     (async () => {
-      console.log('[bootstrap] body running...');
+      //console.log('[bootstrap] body running...');
       // Ensure Android channel exists (idempotent — safe to call every boot)
       if (Platform.OS === 'android') {
         await Notifications.setNotificationChannelAsync('quran-companion', {
