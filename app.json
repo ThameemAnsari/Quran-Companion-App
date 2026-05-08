@@ -2,6 +2,7 @@
   "expo": {
     "name": "Qalbi",
     "slug": "quran-companion",
+    "scheme": "qurancompanion",
     "version": "1.1.0",
     "orientation": "portrait",
     "icon": "./assets/app_icon.png",
@@ -46,7 +47,9 @@
           "color": "#4A7C59",
           "androidMode": "default"
         }
-      ]
+      ],
+      "expo-web-browser",
+      "expo-secure-store"
     ],
     "extra": {
       "quranApiBase": "https://api.qurancdn.com/api/qdc/v4",

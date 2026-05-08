@@ -10,11 +10,13 @@ import {
   Share,
   Alert,
   Image,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
+import { useAuthRequest } from 'expo-auth-session';
 import { useAppStore } from '../store/useAppStore';
 import {
   requestNotificationPermission,
@@ -22,9 +24,101 @@ import {
   scheduleSmartDailyReminder,
   scheduleTestNotification,
 } from '../services/notificationService';
+import {
+  QF_CLIENT_ID,
+  QF_REDIRECT_URI,
+  QF_DISCOVERY,
+  exchangeCodeForToken,
+  fetchQuranComStreakDays,
+  getSavedAccessToken,
+  clearTokens,
+} from '../services/quranAuth';
 
 export const ProfileScreen: React.FC = () => {
   const { streak, weekStats, bookmarks, reflections, notificationsEnabled, setNotificationsEnabled, dailyStats, selectedTranslationName } = useAppStore();
+
+  // ── Quran.com sync state ──────────────────────────────────────────────────
+  const [qfStreak, setQfStreak] = useState<number | null>(null);
+  const [syncStatus, setSyncStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
+  const [isConnected, setIsConnected] = useState(false);
+
+  const [request, response, promptAsync] = useAuthRequest(
+    {
+      clientId: QF_CLIENT_ID,
+      scopes: ['openid', 'streak', 'offline_access'],
+      redirectUri: QF_REDIRECT_URI,
+      usePKCE: true,
+    },
+    QF_DISCOVERY,
+  );
+
+  // Restore session from secure storage on mount
+  useEffect(() => {
+    getSavedAccessToken().then(async (token) => {
+      if (!token) return;
+      setIsConnected(true);
+      const days = await fetchQuranComStreakDays(token);
+      if (days !== null) { setQfStreak(days); setSyncStatus('success'); }
+    });
+  }, []);
+
+  // Handle OAuth2 response
+  useEffect(() => {
+    if (!response) return;
+    if (response.type === 'error') {
+      setSyncStatus('error');
+      Alert.alert('Sign-in failed', response.error?.message ?? 'Unknown error');
+      return;
+    }
+    if (response.type !== 'success' || !request?.codeVerifier) return;
+
+    (async () => {
+      setSyncStatus('loading');
+      try {
+        const token = await exchangeCodeForToken(
+          response.params.code,
+          request.codeVerifier!,
+        );
+        setIsConnected(true);
+        const days = await fetchQuranComStreakDays(token);
+        if (days !== null) { setQfStreak(days); }
+        setSyncStatus('success');
+      } catch (e: any) {
+        setSyncStatus('error');
+        Alert.alert('Sync failed', e?.message ?? 'Could not connect to Quran.com');
+      }
+    })();
+  }, [response]);
+
+  async function handleSync() {
+    if (isConnected) {
+      // Re-fetch streak with stored token
+      setSyncStatus('loading');
+      const token = await getSavedAccessToken();
+      if (!token) { setIsConnected(false); setSyncStatus('idle'); return; }
+      const days = await fetchQuranComStreakDays(token);
+      if (days !== null) { setQfStreak(days); setSyncStatus('success'); }
+      else { setSyncStatus('error'); }
+      return;
+    }
+    setSyncStatus('loading');
+    promptAsync();
+  }
+
+  async function handleDisconnect() {
+    Alert.alert('Disconnect', 'Remove Quran.com sync?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Disconnect', style: 'destructive', onPress: async () => {
+          await clearTokens();
+          setIsConnected(false);
+          setQfStreak(null);
+          setSyncStatus('idle');
+        },
+      },
+    ]);
+  }
+  // ─────────────────────────────────────────────────────────────────────────
 
   const totalAyahsRead = Math.max(
     weekStats.ayahsRead,
@@ -138,6 +232,39 @@ export const ProfileScreen: React.FC = () => {
             </View>
           ))}
         </View>
+
+        {/* Quran.com Sync Card */}
+        <TouchableOpacity
+          style={[styles.syncCard, isConnected && styles.syncCardConnected]}
+          onPress={handleSync}
+          onLongPress={isConnected ? handleDisconnect : undefined}
+          activeOpacity={0.85}
+          disabled={syncStatus === 'loading'}
+        >
+          <View style={[styles.syncIconWrap, isConnected && styles.syncIconWrapConnected]}>
+            {syncStatus === 'loading'
+              ? <ActivityIndicator size="small" color={isConnected ? '#fff' : '#2E7D32'} />
+              : <Ionicons name={isConnected ? 'checkmark-circle' : 'sync-outline'} size={22} color={isConnected ? '#fff' : '#2E7D32'} />
+            }
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.syncLabel, isConnected && styles.syncLabelConnected]}>
+              {isConnected ? 'Synced with Quran.com' : 'Sync Streak with Quran.com'}
+            </Text>
+            <Text style={[styles.syncSub, isConnected && styles.syncSubConnected]}>
+              {syncStatus === 'loading'
+                ? 'Connecting…'
+                : isConnected && qfStreak !== null
+                ? `Quran.com streak: ${qfStreak} day${qfStreak !== 1 ? 's' : ''} 🔥  •  Hold to disconnect`
+                : isConnected
+                ? 'Tap to refresh  •  Hold to disconnect'
+                : 'Sign in with your Quran.com account'}
+            </Text>
+          </View>
+          {!isConnected && (
+            <Ionicons name="chevron-forward" size={18} color="#2E7D32" />
+          )}
+        </TouchableOpacity>
 
         {/* Menu */}
         <View style={styles.menu}>
@@ -314,6 +441,49 @@ const styles = StyleSheet.create({
     color: '#9CA3AF',
     fontStyle: 'italic',
   },
+  syncCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 16,
+    borderWidth: 1.5,
+    borderColor: '#A5D6A7',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  syncCardConnected: {
+    backgroundColor: '#2E7D32',
+    borderColor: '#2E7D32',
+  },
+  syncIconWrap: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: '#E8F5E9',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  syncIconWrapConnected: {
+    backgroundColor: 'rgba(255,255,255,0.2)',
+  },
+  syncLabel: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#1B1B1B',
+    marginBottom: 2,
+  },
+  syncLabelConnected: { color: '#fff' },
+  syncSub: {
+    fontSize: 12,
+    color: '#6B7280',
+  },
+  syncSubConnected: { color: 'rgba(255,255,255,0.8)' },
   testNotifBtn: {
     flexDirection: 'row',
     alignItems: 'center',

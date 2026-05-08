@@ -4,6 +4,7 @@ import { AppState, AppStateStatus, Platform } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import * as Notifications from 'expo-notifications';
+import * as WebBrowser from 'expo-web-browser';
 import { AppNavigator } from './src/navigation/AppNavigator';
 import { useAppStore } from './src/store/useAppStore';
 import {
@@ -11,6 +12,9 @@ import {
   scheduleSmartDailyReminder,
   scheduleTestNotification,
 } from './src/services/notificationService';
+
+// Required so the OAuth2 redirect back to the app completes the auth session
+WebBrowser.maybeCompleteAuthSession();
 
 function NotificationBootstrap() {
   const {
