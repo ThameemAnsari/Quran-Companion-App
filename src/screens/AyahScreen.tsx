@@ -21,6 +21,7 @@ import { NotificationPermissionModal } from '../components/NotificationPermissio
 import { AddToCollectionSheet } from '../components/AddToCollectionSheet';
 import { TafsirModal } from '../components/TafsirModal';
 import { fetchWordByWord, type WordData } from '../services/quranApi';
+import { syncActivityDay } from '../services/quranAuth';
 import { useAudioPlayer, useAudioPlayerStatus } from 'expo-audio';
 
 type Props = CompositeScreenProps<
@@ -147,7 +148,10 @@ export const AyahScreen: React.FC<Props> = ({ navigation }) => {
       Animated.timing(fadeAnim, { toValue: 1, duration: 500, useNativeDriver: true }),
       Animated.spring(slideAnim, { toValue: 0, useNativeDriver: true }),
     ]).start();
-    if (currentAyah) incrementAyahsRead();
+    if (currentAyah) {
+      incrementAyahsRead();
+      syncActivityDay(currentAyah.verseKey, 30); // fire-and-forget, only runs if logged in
+    }
   }, [currentAyah?.verseKey]);
 
   // Fetch word-by-word when ayah changes (reset collapsed state)
