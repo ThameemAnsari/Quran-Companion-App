@@ -227,7 +227,13 @@ eas.json                           # EAS Build profiles (preview APK / productio
 | [audio.qurancdn.com](https://audio.qurancdn.com) | None | Word-by-word pronunciation audio |
 | [apis.quran.foundation/content](https://apis.quran.foundation/content/api/v4) | OAuth2 (client credentials, `content` scope) | Tafsir (Ibn Kathir + language-native) |
 | [apis.quran.foundation/search](https://apis.quran.foundation/search/v1) | OAuth2 (client credentials, `search` scope) | Mood-based ayah search |
-| [apis-prelive.quran.foundation/auth/v1](https://apis-prelive.quran.foundation/auth/v1) | OAuth2 PKCE (User API, `streak` scope) | Streak sync + reading activity reporting |
+| [apis.quran.foundation/auth/v1](https://apis.quran.foundation/auth/v1) | OAuth2 PKCE (User API, `openid streak offline_access` scopes) | Streak sync + reading activity reporting |
+
+> **OAuth2 endpoints (production)**
+> - Authorization: `https://oauth2.quran.foundation/oauth2/auth`
+> - Token: `https://oauth2.quran.foundation/oauth2/token`
+> - Revocation: `https://oauth2.quran.foundation/oauth2/revoke`
+> - Redirect URI: `qurancompanion://oauth/callback`
 
 > **Content & Search API credentials** are stored in `app.json` under `expo.extra` (`quranClientId`, `quranClientSecret`).  
 > Tokens are fetched automatically using the **client credentials flow**, cached in memory, and proactively renewed 60 seconds before expiry.
@@ -235,6 +241,8 @@ eas.json                           # EAS Build profiles (preview APK / productio
 > **User API credentials** use the **OAuth2 PKCE flow** — the user signs in with their Quran.com account in a browser. The access token is stored securely on-device via `expo-secure-store` and used to:
 > - Report daily reading activity (`POST /v1/activity-days`) — fires once per calendar day, on the first ayah read
 > - Fetch the remote streak (`GET /v1/streaks/current-streak-days`) — synced bidirectionally with the local store
+
+> **Environment toggle** — `src/services/quranAuth.ts` contains a `USE_PRODUCTION` flag. Set to `true` (default) for production endpoints, `false` for pre-live testing.
 
 ---
 
