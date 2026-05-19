@@ -1,24 +1,20 @@
 import * as SecureStore from 'expo-secure-store';
+import Constants from 'expo-constants';
 
 // ─── Environment toggle ───────────────────────────────────────────────────────
-const USE_PRODUCTION = true; // set to false to use pre-live
+// Switch USE_PRODUCTION in app.config.js (not here); credentials come from .env
+const extra = Constants.expoConfig?.extra ?? {};
 
-// Pre-live credentials (testing)
-const PRELIVE_CLIENT_ID     = 'c886c9e1-e30e-49ad-b85d-a949208d360d';
-const PRELIVE_CLIENT_SECRET = 'TfrxaOjLf9Mnaj6-eDJh0vyEx0';
-const PRELIVE_AUTH_BASE     = 'https://prelive-oauth2.quran.foundation';
-const PRELIVE_API_BASE      = 'https://apis-prelive.quran.foundation/auth/v1';
+const CLIENT_ID     = extra.quranClientId     as string;
+const CLIENT_SECRET = extra.quranClientSecret as string;
 
-// Production credentials
-const PROD_CLIENT_ID     = 'e7bf6ca0-8080-4238-a426-ba4472b5806d';
-const PROD_CLIENT_SECRET = 'XltKYlz0_FCIK5VuKO2Ot3FkZG'; // TODO: replace with production client secret
-const PROD_AUTH_BASE     = 'https://oauth2.quran.foundation';
-const PROD_API_BASE      = 'https://apis.quran.foundation/auth/v1';
+const AUTH_BASE = extra.quranClientId === extra.quranProdClientId
+  ? 'https://oauth2.quran.foundation'
+  : 'https://prelive-oauth2.quran.foundation';
 
-const CLIENT_ID     = USE_PRODUCTION ? PROD_CLIENT_ID     : PRELIVE_CLIENT_ID;
-const CLIENT_SECRET = USE_PRODUCTION ? PROD_CLIENT_SECRET : PRELIVE_CLIENT_SECRET;
-const AUTH_BASE     = USE_PRODUCTION ? PROD_AUTH_BASE     : PRELIVE_AUTH_BASE;
-const API_BASE      = USE_PRODUCTION ? PROD_API_BASE      : PRELIVE_API_BASE;
+const API_BASE = extra.quranClientId === extra.quranProdClientId
+  ? 'https://apis.quran.foundation/auth/v1'
+  : 'https://apis-prelive.quran.foundation/auth/v1';
 
 const REDIRECT_URI = 'qurancompanion://oauth/callback';
 

@@ -52,13 +52,7 @@
       "expo-secure-store"
     ],
     "extra": {
-      "quranApiBase": "https://api.qurancdn.com/api/qdc/v4",
-      "quranClientId": "e7bf6ca0-8080-4238-a426-ba4472b5806d",
-      "quranClientSecret": "XltKYlz0_FCIK5VuKO2Ot3FkZG",
-      "audioBase": "https://verses.quran.com",
-      "eas": {
-        "projectId": "9cc0ed0c-d16b-4612-ac70-fdf55c363cbc"
-      }
+      "_note": "Secrets are managed in app.config.js via .env — do not add credentials here."
     }
   }
 }
